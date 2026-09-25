@@ -1,0 +1,12 @@
+# 编译产物
+out/
+*.class
+
+# 打包产物
+*.jar
+
+# 运行时数据（用户库存，不进版本库）
+game_lib.dat
+game_lib_backup.dat
+game_lib.csv
+data/
