@@ -21,16 +21,26 @@ public final class SelfTest {
 
         System.out.println("========== Game 冒烟测试 ==========");
 
-        PlatformTest.run(t);
-        GameConstructTest.run(t);
-        GameEqualsTest.run(t);
-        GameEqualsTest.runStorePreview(t);
-        GameStateTest.run(t);
+        runSafely(t, "PlatformTest", () -> PlatformTest.run(t));
+        runSafely(t, "GameConstructTest", () -> GameConstructTest.run(t));
+        runSafely(t, "GameEqualsTest", () -> GameEqualsTest.run(t));
+        runSafely(t, "GameEqualsTest.runStorePreview", () -> GameEqualsTest.runStorePreview(t));
+        runSafely(t, "GameStateTest", () -> GameStateTest.run(t));
+        runSafely(t, "GameLibraryTest", () -> GameLibraryTest.run(t));
 
         t.printSummary();
 
         if (t.failed() > 0) {
             System.exit(1);
+        }
+    }
+
+    /** 一个套件崩了不该掩盖其他套件的结果，所以逐个兜住。 */
+    private static void runSafely(TestRunner t, String name, Runnable suite) {
+        try {
+            suite.run();
+        } catch (Throwable e) {
+            t.crash(name, e);
         }
     }
 }
