@@ -28,6 +28,7 @@ public final class SelfTest {
         runSafely(t, "GameStateTest", () -> GameStateTest.run(t));
         runSafely(t, "GameLibraryTest", () -> GameLibraryTest.run(t));
         runSafely(t, "CsvTest", () -> CsvTest.run(t));
+        runSafely(t, "GameCsvTest", () -> GameCsvTest.run(t));
 
         t.printSummary();
 
