@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.function.Predicate;
 import java.util.Set;
@@ -29,18 +30,15 @@ public class GameLibrary {
     /** 新建一个空库。 */
     public GameLibrary() {}
 
+    /**
+     * 单条入库（§4.1）。重复时抛异常 —— 交互式录入需要用户立刻知道。
+     *
+     * @throws DuplicateGameException 标题 + 平台已存在
+     */
     public void add(Game game) {
-        Objects.requireNonNull(game, "game 不能为 null");
-        String gameKey = game.key();
-        if(!byKey.containsKey(gameKey)) {
-            // DNE
-            byKey.put(gameKey, game);
-        } else {
-            throw new DuplicateGameException(
-                "该游戏已存在！请勿重复入库。 " + 
-                game.getTitle() + " | " +
-                game.getPlatform()
-            );
+        if (!tryAdd(game)) {
+            throw new DuplicateGameException("该游戏已存在！请勿重复入库。 "
+                    + game.getTitle() + " | " + game.getPlatform());
         }
     }
 
@@ -152,5 +150,41 @@ public class GameLibrary {
             }
         }
         return genres;
+    }
+
+    public ImportReport addAll(Collection<Game> games) {
+        int added = 0;
+        int duplicates = 0;
+        int skipped = 0;
+        List<String> duplicateTitles = new ArrayList<>();
+
+        for (Game g : games) {
+            if (g == null) {
+                skipped++;
+                continue;
+            }
+            if (tryAdd(g)) {
+                added++;
+            } else {
+                duplicates++;
+                duplicateTitles.add(g.getTitle() + " | " + g.getPlatform());
+            }
+        }
+        return new ImportReport(added, duplicates, skipped, duplicateTitles);
+    }
+
+    /**
+     * 真正的插入。{@code true} = 加进去了，{@code false} = 已存在。
+     *
+     * <p>唯一性规则只在这一处，{@code add} 和 {@code addAll} 共用 ——
+     * 否则日后改规则要改两遍。故意 private：对外只暴露两种语义
+     * （{@code add} 抛异常、{@code addAll} 跳过），不给第三种"静默返回 false"。
+     *
+     * <p>{@code putIfAbsent} 一行同时做到插入和判重，且已存在时不动原值 ——
+     * 这正是"重复导入不覆盖库里那份"的由来。
+     */
+    private boolean tryAdd(Game game) {
+        Objects.requireNonNull(game, "game 不能为 null");
+        return byKey.putIfAbsent(game.key(), game) == null;
     }
 }
