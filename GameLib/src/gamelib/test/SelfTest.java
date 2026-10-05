@@ -32,6 +32,7 @@ public final class SelfTest {
         runSafely(t, "StatsTest", () -> StatsTest.run(t));
         runSafely(t, "GameFormatterTest", () -> GameFormatterTest.run(t));
         runSafely(t, "ConsoleTest", () -> ConsoleTest.run(t));
+        runSafely(t, "MenuTest", () -> MenuTest.run(t));
 
         t.printSummary();
 

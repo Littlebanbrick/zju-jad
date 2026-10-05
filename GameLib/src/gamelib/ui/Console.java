@@ -140,9 +140,26 @@ public final class Console {
      * @throws CancelledException 留空或 EOF
      */
     public LocalDate readDate(String prompt) {
+        return readDate(prompt, null);
+    }
+
+    /**
+     * 读日期，<b>留空返回 {@code fallback}</b>。
+     *
+     * <p>给「通关日期（回车 = 今天）」这类有默认值的字段用。语义和
+     * {@link #readDate(String)} 不同：那边留空是<b>取消操作</b>，这边留空是<b>接受默认值</b>，
+     * 所以入口是 {@code readLine} 而不是 {@code readRequired}。
+     *
+     * @param fallback 留空时返回的值；传 {@code null} 则留空算取消（等同单参版本）
+     * @throws CancelledException 无默认值（{@code fallback == null}）时留空，或 EOF
+     */
+    public LocalDate readDate(String prompt, LocalDate fallback) {
         LocalDate today = LocalDate.now();
         while (true) {
-            String raw = readRequired(prompt);
+            String raw = (fallback == null) ? readRequired(prompt) : readLine(prompt).strip();
+            if (raw.isEmpty()) {
+                return fallback;                 // 只有 fallback != null 才可能走到这里
+            }
             try {
                 LocalDate date = LocalDate.parse(raw);
                 if (date.isAfter(today)) {

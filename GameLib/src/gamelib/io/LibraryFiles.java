@@ -74,7 +74,9 @@ public final class LibraryFiles {
             warnings.add("二进制存档 '" + binaryPath + "' 不存在。");
         } else {
             try {
-                return new LoadReport(Source.BINARY, readBinary(), warnings);
+                List<Game> games = readBinary();
+                warnings.add("已从二进制存档 '" + binaryPath + "' 加载 " + games.size() + " 款游戏。");
+                return new LoadReport(Source.BINARY, games, warnings);
             } catch (RuntimeException e) {
                 warnings.add("二进制存档 '" + binaryPath + "' 损坏，回退到 CSV：" + e.getMessage());
             }

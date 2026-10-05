@@ -32,6 +32,7 @@ public final class ConsoleTest {
         testReadInt(t);
         testReadDouble(t);
         testReadDate(t);
+        testReadDateWithFallback(t);
         testReadYesNo(t);
         testConfirm(t);
         testEof(t);
@@ -173,6 +174,41 @@ public final class ConsoleTest {
         Fixture cancelled = new Fixture("\n");
         expectCancelled(t, "留空 -> CancelledException",
                 () -> cancelled.console.readDate("日期: "));
+    }
+
+    // ---------- readDate(prompt, fallback) ----------
+
+    private static void testReadDateWithFallback(TestRunner t) {
+        t.section("[46b] Console：readDate(prompt, fallback)");
+
+        LocalDate fallback = LocalDate.now();
+        LocalDate past = LocalDate.of(2024, 3, 15);
+
+        Fixture blank = new Fixture("\n");
+        t.check(blank.console.readDate("通关日期: ", fallback).equals(fallback),
+                "★ 留空 -> 返回 fallback（不是取消）");
+
+        Fixture given = new Fixture("2024-03-15\n");
+        t.check(given.console.readDate("通关日期: ", fallback).equals(past),
+                "★ 给了日期就用给的（补录历史）");
+
+        Fixture bad = new Fixture("2024/03/15\n2024-03-15\n");
+        t.check(bad.console.readDate("通关日期: ", fallback).equals(past),
+                "★ 格式错仍然重问，不走 fallback");
+        t.check(bad.output().contains("【警告】"), "打出了警告");
+
+        Fixture future = new Fixture(LocalDate.now().plusDays(1) + "\n" + past + "\n");
+        t.check(future.console.readDate("通关日期: ", fallback).equals(past),
+                "★ 未来日期仍然重问");
+
+        // fallback == null 时退化成"留空即取消"，等同单参版本
+        Fixture noFallback = new Fixture("\n");
+        expectCancelled(t, "fallback 为 null 时留空 -> CancelledException",
+                () -> noFallback.console.readDate("通关日期: ", null));
+
+        // 单参版本不受影响
+        Fixture single = new Fixture("2024-03-15\n");
+        t.check(single.console.readDate("日期: ").equals(past), "单参版本行为不变");
     }
 
     // ---------- readYesNo ----------
