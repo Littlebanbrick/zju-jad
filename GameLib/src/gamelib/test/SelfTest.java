@@ -29,6 +29,9 @@ public final class SelfTest {
         runSafely(t, "GameLibraryTest", () -> GameLibraryTest.run(t));
         runSafely(t, "CsvTest", () -> CsvTest.run(t));
         runSafely(t, "GameCsvTest", () -> GameCsvTest.run(t));
+        runSafely(t, "StatsTest", () -> StatsTest.run(t));
+        runSafely(t, "GameFormatterTest", () -> GameFormatterTest.run(t));
+        runSafely(t, "ConsoleTest", () -> ConsoleTest.run(t));
 
         t.printSummary();
 
