@@ -5,7 +5,6 @@ import gamelib.model.Platform;
 
 import java.time.LocalDate;
 
-/** 业务方法：游玩时长、通关状态、评分、笔记、隐藏（§4.3 / §4.4）。 */
 public final class GameStateTest {
 
     private GameStateTest() {

@@ -5,12 +5,6 @@ import gamelib.io.Csv;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * CSV 转义与解析。纯字符串测试 —— 不碰 Game，不碰文件。
- *
- * <p>核心验收标准是 round-trip：{@code parseLine(formatRecord(f))} 必须等于 {@code f}。
- * 转义和反转义是同一套规则的两面，round-trip 通过就说明两边一致。
- */
 public final class CsvTest {
 
     private CsvTest() {
@@ -22,8 +16,6 @@ public final class CsvTest {
         testBom(t);
         testRoundTrip(t);
     }
-
-    // ---------- 转义 ----------
 
     private static void testEscape(TestRunner t) {
         t.section("[19] Csv.escape / formatRecord");
@@ -44,8 +36,6 @@ public final class CsvTest {
         t.check(Csv.formatRecord(List.of("a", "b,c")).equals("a,\"b,c\""),
                 "只有需要的那一个字段加引号");
     }
-
-    // ---------- 解析 ----------
 
     private static void testParseLine(TestRunner t) {
         t.section("[20] Csv.parseLine");
@@ -73,14 +63,11 @@ public final class CsvTest {
         t.check(Csv.parseLine("\"a,b\",\"c,d\"").equals(List.of("a,b", "c,d")),
                 "相邻两个带引号字段");
 
-        // 关键安全网：换行会把一条记录切断，这时必须报错而不是静默产出脏数据
         t.expectInvalid("★ 引号未闭合 -> 抛异常（外部 CSV 含换行的信号）",
                 () -> Csv.parseLine("\"续行内容没有收尾引号"));
         t.expectInvalid("引号未闭合（带逗号）",
                 () -> Csv.parseLine("a,\"b,c"));
     }
-
-    // ---------- BOM ----------
 
     private static void testBom(TestRunner t) {
         t.section("[21] BOM 处理");
@@ -92,18 +79,14 @@ public final class CsvTest {
         t.check(Csv.stripBom("a" + Csv.BOM + "b").equals("a" + Csv.BOM + "b"),
                 "只剥行首，中间的不动");
 
-        // 实测确认：strip() 去不掉 BOM，因为它不是空白字符
         t.check((Csv.BOM + "title").strip().startsWith(Csv.BOM),
                 "★ String.strip() 去不掉 BOM（所以必须手动剥）");
 
-        // 不剥 BOM 的后果
         List<String> withoutStrip = Csv.parseLine(Csv.BOM + "title,note");
         t.check(!withoutStrip.get(0).equals("title"), "★ 不剥 BOM：列名变成 \\uFEFFtitle");
         List<String> withStrip = Csv.parseLine(Csv.stripBom(Csv.BOM + "title,note"));
         t.check(withStrip.get(0).equals("title"), "剥了 BOM 之后列名才是 title");
     }
-
-    // ---------- round-trip ----------
 
     private static void testRoundTrip(TestRunner t) {
         t.section("[22] round-trip：写出去的必须能原样读回来");
@@ -132,7 +115,6 @@ public final class CsvTest {
                     "round-trip [" + s + "]  ->  " + line);
         }
 
-        // 整条记录（12 列，模拟真实一行）
         List<String> record = List.of(
                 "Elden Ring", "Steam", "ARPG", "298.0", "2022-03-01",
                 "y", "2024-03-15", "120.0", "10", "神作\", DLC别买", "", "false");
@@ -142,7 +124,6 @@ public final class CsvTest {
         t.check(back.size() == 12, "读回来仍是 12 列");
         t.check(back.get(9).equals("神作\", DLC别买"), "第 10 列的引号+逗号完整还原");
 
-        // 多行批量 round-trip
         List<List<String>> rows = new ArrayList<>();
         rows.add(List.of("A", "a,b"));
         rows.add(List.of("B", ""));

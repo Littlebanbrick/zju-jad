@@ -10,16 +10,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * Stats 的测试（§4.5 统计报表）。
- *
- * <p>重点不是"数字算对了"，而是三件容易写错的事：
- * <ol>
- *   <li>空库的平均评分必须是 {@code 0.0} 而不是 {@code NaN}</li>
- *   <li>平台和年份的迭代顺序必须稳定（柱状图和年度报表靠它）</li>
- *   <li>「最烧钱的平台」在最大花费恰好是 0 时也要返回平台，不能返回 empty</li>
- * </ol>
- */
 public final class StatsTest {
 
     private StatsTest() {
@@ -33,8 +23,6 @@ public final class StatsTest {
         testMostExpensivePlatform(t);
         testRatingZero(t);
     }
-
-    // ---------- 空库 ----------
 
     private static void testEmpty(TestRunner t) {
         t.section("[30] Stats：空库");
@@ -57,14 +45,11 @@ public final class StatsTest {
                 () -> Stats.of(null));
     }
 
-    // ---------- 基本聚合 ----------
-
     private static void testAggregation(TestRunner t) {
         t.section("[31] Stats：基本聚合");
 
         Stats s = Stats.of(fixture());
 
-        // 4 款：298 + 0 + 70 + 99 = 467；评分 10 + 8 + 9 + 9 = 36；36 / 4 = 9.0
         t.check(s.totalGames() == 4, "totalGames = 4");
         close(t, "totalSpent = 467.0", s.totalSpent(), 467.0);
         close(t, "averageRating = 9.0", s.averageRating(), 9.0);
@@ -90,14 +75,11 @@ public final class StatsTest {
         t.check(!s.completedByYear().containsKey(2022), "没有 2022 年的记录");
     }
 
-    // ---------- 顺序 ----------
-
     private static void testOrder(TestRunner t) {
         t.section("[32] Stats：迭代顺序必须稳定");
 
         Stats s = Stats.of(fixture());
 
-        // 平台按 Platform 的声明顺序：STEAM, EPIC, GOG, XBOX, OTHER（只保留买过的）
         List<Platform> platformOrder = new ArrayList<>(s.countByPlatform().keySet());
         t.check(platformOrder.size() == 3, "3 个平台");
         t.check(platformOrder.get(0) == Platform.STEAM, "★ 首个平台是 STEAM");
@@ -107,12 +89,10 @@ public final class StatsTest {
         t.check(new ArrayList<>(s.spendByPlatform().keySet()).equals(platformOrder),
                 "两张平台表的 key 顺序一致");
 
-        // 年份升序
         List<Integer> years = new ArrayList<>(s.completedByYear().keySet());
         t.check(years.get(0) == 2023 && years.get(1) == 2024,
                 "★ 年份升序（柱状图/报表按它逐行打印）");
 
-        // 顺序必须是"每次一样"，不能靠哈希碰巧
         for (int i = 0; i < 5; i++) {
             Stats again = Stats.of(fixture());
             if (!new ArrayList<>(again.countByPlatform().keySet()).equals(platformOrder)) {
@@ -122,8 +102,6 @@ public final class StatsTest {
         }
         t.check(true, "重复计算 5 次，平台顺序稳定");
     }
-
-    // ---------- 隐藏项 ----------
 
     private static void testHidden(TestRunner t) {
         t.section("[33] Stats：排除隐藏项（§4.4）");
@@ -141,12 +119,9 @@ public final class StatsTest {
         t.check(!s.spendByPlatform().containsKey(Platform.GOG), "花费表同样消失");
         t.check(s.countByPlatform().get(Platform.STEAM) == 2, "Steam 仍是 2 款");
 
-        // 用 allIncludingHidden() 会得到不同的答案 —— 这里锁住"统计必须用 all()"
         t.check(lib.allIncludingHidden().size() == 4, "库里实际存了 4 条");
         t.check(s.totalGames() == lib.all().size(), "totalGames == lib.all().size()");
     }
-
-    // ---------- 最烧钱的平台 ----------
 
     private static void testMostExpensivePlatform(TestRunner t) {
         t.section("[34] Stats：最烧钱的平台（§4.5）");
@@ -154,7 +129,6 @@ public final class StatsTest {
         checkPlatform(t, "Steam（¥368）最烧钱", Stats.of(fixture()).mostExpensivePlatform(),
                 Platform.STEAM);
 
-        // ★ 全库花费都是 0 时，仍要返回平台
         GameLibrary allFree = new GameLibrary();
         allFree.add(game("GTA5", Platform.EPIC, 0.0, 8, null));
         Stats freeStats = Stats.of(allFree);
@@ -163,29 +137,24 @@ public final class StatsTest {
                 "★ 只有 0 元游戏时，最烧钱的平台仍是 Epic（不能返回 empty）");
         checkPlatform(t, "★ 返回的是 EPIC", freeStats.mostExpensivePlatform(), Platform.EPIC);
 
-        // 部分为 0：取非 0 的那个
         GameLibrary mixed = new GameLibrary();
         mixed.add(game("GTA5", Platform.EPIC, 0.0, 8, null));
         mixed.add(game("Elden Ring", Platform.STEAM, 298.0, 10, null));
         checkPlatform(t, "有一个非 0 时取非 0 的",
                 Stats.of(mixed).mostExpensivePlatform(), Platform.STEAM);
 
-        // 并列：取平台声明顺序靠前的
         GameLibrary tie = new GameLibrary();
         tie.add(game("A", Platform.STEAM, 50.0, 5, null));
         tie.add(game("B", Platform.EPIC, 50.0, 5, null));
         checkPlatform(t, "并列时取声明顺序靠前的（STEAM 在 EPIC 之前）",
                 Stats.of(tie).mostExpensivePlatform(), Platform.STEAM);
 
-        // 两个都是 0 的并列
         GameLibrary tieZero = new GameLibrary();
         tieZero.add(game("A", Platform.STEAM, 0.0, 5, null));
         tieZero.add(game("B", Platform.EPIC, 0.0, 5, null));
         checkPlatform(t, "★ 并列且都是 0 时同样返回 STEAM",
                 Stats.of(tieZero).mostExpensivePlatform(), Platform.STEAM);
     }
-
-    // ---------- 0 分参与平均 ----------
 
     private static void testRatingZero(TestRunner t) {
         t.section("[35] Stats：0 分是合法分数，参与平均");
@@ -203,20 +172,10 @@ public final class StatsTest {
         close(t, "只有一款 0 分游戏时平均分是 0.0", Stats.of(single).averageRating(), 0.0);
     }
 
-    // ---------- 工具 ----------
-
-    /** 浮点比较留一点误差余量：价格求和是 double 累加，不该靠咬死相等。 */
     private static void close(TestRunner t, String what, double actual, double expected) {
         t.check(Math.abs(actual - expected) < 1e-9, what + "（实际 " + actual + "）");
     }
 
-    /**
-     * 断言 Optional 里有值且等于 expected。
-     *
-     * <p>不用 {@code orElseThrow()}：一旦实现有 bug 返回了 empty，
-     * 那会抛 NoSuchElementException 炸穿整组测试，后面几条就没机会跑了。
-     * 记成 FAIL 才能一次看到全部问题。
-     */
     private static void checkPlatform(TestRunner t, String what,
                                       Optional<Platform> actual, Platform expected) {
         if (actual.isEmpty()) {
@@ -226,15 +185,6 @@ public final class StatsTest {
         }
     }
 
-    /**
-     * 4 款游戏的固定库：
-     * <pre>
-     * Elden Ring   | Steam | ¥298 | 10 分 | 2024-03-15 通关
-     * GTA5         | Epic  | ¥0   |  8 分 | 2024-01-01 通关
-     * Hades        | Steam | ¥70  |  9 分 | 2023-05-01 通关
-     * The Witcher 3| GOG   | ¥99  |  9 分 | 未通关
-     * </pre>
-     */
     private static GameLibrary fixture() {
         GameLibrary lib = new GameLibrary();
         lib.add(game("Elden Ring", Platform.STEAM, 298.0, 10, LocalDate.of(2024, 3, 15)));
@@ -244,7 +194,6 @@ public final class StatsTest {
         return lib;
     }
 
-    /** {@code completedDate} 为 null 表示未通关（方案 B）。 */
     private static Game game(String title, Platform platform, double price, int rating,
                              LocalDate completedDate) {
         Game g = new Game(title, platform, "RPG", price,

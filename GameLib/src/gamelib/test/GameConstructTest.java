@@ -5,7 +5,6 @@ import gamelib.model.Platform;
 
 import java.time.LocalDate;
 
-/** Game 的构造、边界值与输入校验。 */
 public final class GameConstructTest {
 
     private GameConstructTest() {
@@ -15,13 +14,13 @@ public final class GameConstructTest {
         t.section("[2] 构造与字段读取");
 
         Game elden = new Game(
-                "Elden Ring", 
-                Platform.STEAM, 
-                "ARPG", 
+                "Elden Ring",
+                Platform.STEAM,
+                "ARPG",
                 298.0,
-                LocalDate.of(2022, 3, 1), 
-                10, 
-                120.0, 
+                LocalDate.of(2022, 3, 1),
+                10,
+                120.0,
                 "神作，DLC快出！"
         );
         t.check(elden.getTitle().equals("Elden Ring"), "标题正确");

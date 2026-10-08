@@ -8,16 +8,13 @@ public class Game implements Serializable {
     public static final int MIN_RATING = 0;
     public static final int MAX_RATING = 10;
 
-    /**
-     * key() 由这两个字段算出，hence final。
-     */
     private final String title;
     private final Platform platform;
 
     private final String genre;
-    private final double purchasePrice;     // >=0
-    private final LocalDate purchaseDate;   // <= 今天
-    private LocalDate completedDate;    // nullable, where null means uncompleted
+    private final double purchasePrice;
+    private final LocalDate purchaseDate;
+    private LocalDate completedDate;
     private double playtimeHours;
     private int rating;
     private String notes;
@@ -41,7 +38,7 @@ public class Game implements Serializable {
         this.rating = requireInRange(rating, MIN_RATING, MAX_RATING, "个人评分");
         this.playtimeHours = requireNonNegative(playtimeHours, "游玩时长");
         this.notes = (note == null) ? "" : note.trim();
-        this.completedDate = null;   // null = 未通关
+        this.completedDate = null;
         this.hidden = false;
     }
 
@@ -140,7 +137,7 @@ public class Game implements Serializable {
 
     public void markCompleted(LocalDate completedDate) {
         LocalDate date = requireNotFuture(completedDate, "通关日期");
-        // 通关日期不能早于购买日期
+
         if(this.purchaseDate.isAfter(date)) {
             throw new InvalidGameDataException
                 ("通关日期" + completedDate + "不能早于购买日期" + this.purchaseDate);
@@ -165,12 +162,6 @@ public class Game implements Serializable {
         this.hidden = false;
     }
 
-    // ---------- 契约方法 ----------
-
-    /**
-     * 唯一键：规范化标题 + 平台。查重、equals、hashCode 全部经由这里。
-     * key 只由两个 final 字段算出，所以对象放进 HashMap 不会失联。
-     */
     public String key() {
         return keyOf(title, platform);
     }
@@ -180,27 +171,23 @@ public class Game implements Serializable {
              + "|" + requireNonNull(platform, "平台").name();
     }
 
-    /** 大小写不敏感。 */
     private static String normalizeKey(String title) {
         return title.trim().toLowerCase();
     }
 
-    /** "同一款游戏" = key 相同。不看价格、时长、评分、隐藏状态。 */
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof Game other)) {   // Java 16+ 模式匹配
+        if (!(o instanceof Game other)) {
             return false;
         }
         return key().equals(other.key());
     }
 
-    /** 必须与 equals 成对：equals 相等时 hashCode 必须相等，否则 HashMap 查不到。 */
     @Override
     public int hashCode() {
         return key().hashCode();
     }
 
-    /** 仅调试用。对齐表格属于 ui 层，不写在这里。 */
     @Override
     public String toString() {
         return "Game[" + key()

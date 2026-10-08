@@ -11,12 +11,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * equals / hashCode / key 契约。
- *
- * <p>这一组是 Game 里最容易埋雷的部分：写错了不会编译报错，
- * 只会在 HashMap / ArrayList 内部静默失效。
- */
 public final class GameEqualsTest {
 
     private GameEqualsTest() {
@@ -66,7 +60,6 @@ public final class GameEqualsTest {
         t.check(!a.equals(null), "equals(null) 再次确认为 false");
     }
 
-    /** 模拟第 2 步 store 层的查重路径：Map<String, Game> + keyOf。 */
     public static void runStorePreview(TestRunner t) {
         t.section("[7] 预告：第 2 步的 Map 索引形状");
 

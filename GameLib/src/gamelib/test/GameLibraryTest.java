@@ -14,12 +14,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-/**
- * GameLibrary 的测试：入库查重、Optional 契约、隐藏过滤、搜索、分组。
- *
- * <p>其中「未命中必须返回 Optional.empty() 而不是 null」是重点回归项 ——
- * 这类错误不给编译警告，只在调用方链式调用时炸 NPE。
- */
 public final class GameLibraryTest {
 
     private GameLibraryTest() {
@@ -35,8 +29,6 @@ public final class GameLibraryTest {
         testZjuScenarios(t);
         testAddAll(t);
     }
-
-    // ---------- 入库与查重 ----------
 
     private static void testAddAndDuplicate(TestRunner t) {
         t.section("[12] 入库与查重（§4.1）");
@@ -67,8 +59,6 @@ public final class GameLibraryTest {
         t.expectThrows(NullPointerException.class, "add(null)", () -> lib.add(null));
     }
 
-    // ---------- find / contains ----------
-
     private static void testFindAndContains(TestRunner t) {
         t.section("[13] find / contains —— Optional 永不返回 null（§3）");
 
@@ -98,8 +88,6 @@ public final class GameLibraryTest {
         t.check(lib.contains("elden ring", Platform.STEAM), "contains 大小写不敏感");
     }
 
-    // ---------- remove ----------
-
     private static void testRemove(TestRunner t) {
         t.section("[14] 删除（§4.4）");
 
@@ -118,8 +106,6 @@ public final class GameLibraryTest {
         t.check(missing.isEmpty(), "删不存在时 isEmpty() 为 true");
         t.check(lib.remove("从未存在", Platform.STEAM).isEmpty(), "删从未存在的游戏也安全");
     }
-
-    // ---------- 隐藏 ----------
 
     private static void testHidden(TestRunner t) {
         t.section("[15] 隐藏过滤（§4.4 扩展）");
@@ -154,8 +140,6 @@ public final class GameLibraryTest {
         t.check(lib.remove("Witcher 3", Platform.GOG).isPresent(), "隐藏的游戏仍能被删除");
         t.check(lib.size() == 1, "删除隐藏项后 size() == 1");
     }
-
-    // ---------- 搜索与筛选 ----------
 
     private static void testSearch(TestRunner t) {
         t.section("[16] 搜索与筛选（§2）");
@@ -198,8 +182,6 @@ public final class GameLibraryTest {
         t.check(lib.size() == 5, "★ 改动返回的 List 不影响库（返回的是副本）");
     }
 
-    // ---------- 分组与类型清单 ----------
-
     private static void testGroupAndGenres(TestRunner t) {
         t.section("[17] 分组与类型清单（§3 / §4.5）");
 
@@ -226,7 +208,6 @@ public final class GameLibraryTest {
         }
         t.check(total == 3, "各组数量之和 == size()");
 
-        // §4.5 的「各平台数量分布」是它的派生结果
         Map<String, Integer> counts = new LinkedHashMap<>();
         grouped.forEach((p, list) -> counts.put(p.toString(), list.size()));
         t.check(counts.get("Steam") == 2, "§4.5 数量分布：Steam = 2");
@@ -242,8 +223,6 @@ public final class GameLibraryTest {
         lib.add(game("Elden Ring 2", Platform.STEAM, "ARPG", 1.0, 1, false));
         t.check(lib.allGenres().size() == 3, "★ 又加一款 ARPG 后类型数仍是 3（去重）");
     }
-
-    // ---------- §2 的五个真实场景 ----------
 
     private static void testZjuScenarios(TestRunner t) {
         t.section("[18] §2 场景化验证");
@@ -262,8 +241,6 @@ public final class GameLibraryTest {
         t.check(unfinishedSteam.size() == 2,
                 "场景 2：Steam 上未通关的有 2 款（Elden Ring、The Witcher 3）");
 
-        // §2 原话是「还没玩过的开放世界游戏」—— 三个条件复合。
-        // 真实系统里「开放世界」通常是标签不是类型，这里简化成类型 OpenWorld。
         List<Game> openWorldUnfinished = lib.filter(g ->
                 g.getPlatform() == Platform.STEAM
                         && !g.isCompleted()
@@ -291,13 +268,6 @@ public final class GameLibraryTest {
                 "场景 5：Epic 版没买过，可以放心买");
     }
 
-    // ---------- 批量导入（§4.1） ----------
-
-    /**
-     * {@code addAll} 与 {@code add} 的语义差别是这一组的核心：
-     * {@code add} 遇到重复抛异常，{@code addAll} 跳过并计数 ——
-     * 一行重复不该中断整批导入。
-     */
     private static void testAddAll(TestRunner t) {
         t.section("[29] 批量导入 addAll（§4.1）");
 
@@ -319,7 +289,6 @@ public final class GameLibraryTest {
         t.check(fresh.total() == 3, "total() == 3");
         t.check(lib.size() == 3, "库里 3 条");
 
-        // ★ 与 add 的关键差别
         ImportReport dup = lib.addAll(List.of(
                 game("Elden Ring", Platform.STEAM, "ARPG", 298.0, 10, false),
                 game("  elden ring  ", Platform.STEAM, "ARPG", 1.0, 1, false),
@@ -330,13 +299,11 @@ public final class GameLibraryTest {
         t.check(dup.skipped() == 0, "重复不计入 skipped");
         t.check(lib.size() == 4, "库里 4 条");
 
-        // 重复导入不能覆盖库里的原对象
         Game before = lib.find("Elden Ring", Platform.STEAM).orElseThrow();
         t.check(before.getPurchasePrice() == 298.0,
                 "★ 重复导入不覆盖库里那份（价格仍是 298，不是 1.0）");
         t.check(before.getRating() == 10, "评分也没被那份 1 分的覆盖");
 
-        // null：注意要用 Arrays.asList，List.of 不接受 null
         ImportReport withNull = lib.addAll(Arrays.asList(
                 null, game("Stardew Valley", Platform.GOG, "Sim", 48.0, 9, false), null));
         t.check(withNull.added() == 1, "null 之外的那 1 条入库");
@@ -351,7 +318,6 @@ public final class GameLibraryTest {
         t.check(dup.duplicates() == dup.duplicateTitles().size(),
                 "duplicates 计数与明细条数一致");
 
-        // 顺序
         GameLibrary ordered = new GameLibrary();
         ordered.addAll(List.of(
                 game("C", Platform.STEAM, "RPG", 1.0, 5, false),
@@ -363,7 +329,6 @@ public final class GameLibraryTest {
                         && all.get(2).getTitle().equals("B"),
                 "导入后保持输入顺序（LinkedHashMap）");
 
-        // add 的语义没变，两个方法各司其职
         t.expectInvalid("add 仍然抛异常（只有 addAll 跳过重复）",
                 () -> ordered.add(game("C", Platform.STEAM, "RPG", 1.0, 5, false)));
 
@@ -371,13 +336,6 @@ public final class GameLibraryTest {
                 "导入后 find 大小写不敏感");
     }
 
-    // ---------- 测试夹具 ----------
-
-    /**
-     * 5 款游戏的固定库：
-     * Witcher3(GOG,99,已通关) / Witcher3(Steam,158,未通关) / Elden Ring(Steam,298,未通关)
-     * / GTA5(Epic,0,已通关) / Hades(Steam,70,已通关)
-     */
     private static GameLibrary fixture() {
         GameLibrary lib = new GameLibrary();
         lib.add(game("The Witcher 3", Platform.GOG, "RPG", 99.0, 9, true));
@@ -388,7 +346,6 @@ public final class GameLibraryTest {
         return lib;
     }
 
-    /** 通关日期统一盖 2024-01-01，方便按年份筛选。 */
     private static Game game(String title, Platform platform, String genre,
                              double price, int rating, boolean completed) {
         Game g = new Game(title, platform, genre, price,

@@ -9,18 +9,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.Scanner;
 
-/**
- * Console 的测试。
- *
- * <p>每个用例用一段脚本文本喂进去，所以校验重试、EOF、默认答案这些
- * 「只在人工点菜单时才会遇到」的分支都能自动测。
- *
- * <p>两个重点：
- * <ul>
- *   <li>{@code readInt} 之后 {@code readLine} 不能拿到空串（不能用 {@code nextInt()}）</li>
- *   <li>EOF 必须抛 {@code CancelledException} 而不是死循环 —— 死循环会让测试挂住</li>
- * </ul>
- */
 public final class ConsoleTest {
 
     private ConsoleTest() {
@@ -39,8 +27,6 @@ public final class ConsoleTest {
         testNoLeftoverNewline(t);
     }
 
-    // ---------- 输出 ----------
-
     private static void testOutput(TestRunner t) {
         t.section("[42] Console：输出方法");
 
@@ -57,8 +43,6 @@ public final class ConsoleTest {
         f.console.println();
         t.check(f.output().length() > before.length(), "无参 println 输出一个换行");
     }
-
-    // ---------- readLine / readRequired ----------
 
     private static void testReadLine(TestRunner t) {
         t.section("[43] Console：readLine / readRequired");
@@ -77,8 +61,6 @@ public final class ConsoleTest {
         expectCancelled(t, "★ 空回车 -> CancelledException",
                 () -> empty.console.readRequired("标题: "));
     }
-
-    // ---------- readInt ----------
 
     private static void testReadInt(TestRunner t) {
         t.section("[44] Console：readInt 校验重试");
@@ -111,8 +93,6 @@ public final class ConsoleTest {
                 () -> cancelled.console.readInt("评分: ", 0, 10));
     }
 
-    // ---------- readDouble ----------
-
     private static void testReadDouble(TestRunner t) {
         t.section("[45] Console：readDouble 与 NaN");
 
@@ -125,14 +105,11 @@ public final class ConsoleTest {
         Fixture bad = new Fixture("abc\n2.0\n");
         t.check(bad.console.readDouble("价格: ", 0, 1000) == 2.0, "非数字后重问");
 
-        // 关键：parseDouble("NaN") 会成功返回 NaN，而 NaN 与任何数比较都是 false，
-        // 能一路穿过区间检查
         Fixture nan = new Fixture("NaN\n1.5\n");
         t.check(nan.console.readDouble("价格: ", 0, 1000) == 1.5,
                 "★ NaN 必须被挡住并重问（否则会穿过区间检查）");
         t.check(nan.output().contains("【警告】"), "NaN 打出了警告");
 
-        // Infinity 由区间上界挡住
         Fixture infinity = new Fixture("1e999\n1.5\n");
         t.check(infinity.console.readDouble("价格: ", 0, 1000) == 1.5,
                 "★ Infinity 被上界挡住并重问");
@@ -144,8 +121,6 @@ public final class ConsoleTest {
         expectCancelled(t, "留空 -> CancelledException",
                 () -> cancelled.console.readDouble("价格: ", 0, 1000));
     }
-
-    // ---------- readDate ----------
 
     private static void testReadDate(TestRunner t) {
         t.section("[46] Console：readDate");
@@ -176,8 +151,6 @@ public final class ConsoleTest {
                 () -> cancelled.console.readDate("日期: "));
     }
 
-    // ---------- readDate(prompt, fallback) ----------
-
     private static void testReadDateWithFallback(TestRunner t) {
         t.section("[46b] Console：readDate(prompt, fallback)");
 
@@ -201,17 +174,13 @@ public final class ConsoleTest {
         t.check(future.console.readDate("通关日期: ", fallback).equals(past),
                 "★ 未来日期仍然重问");
 
-        // fallback == null 时退化成"留空即取消"，等同单参版本
         Fixture noFallback = new Fixture("\n");
         expectCancelled(t, "fallback 为 null 时留空 -> CancelledException",
                 () -> noFallback.console.readDate("通关日期: ", null));
 
-        // 单参版本不受影响
         Fixture single = new Fixture("2024-03-15\n");
         t.check(single.console.readDate("日期: ").equals(past), "单参版本行为不变");
     }
-
-    // ---------- readYesNo ----------
 
     private static void testReadYesNo(TestRunner t) {
         t.section("[47] Console：readYesNo");
@@ -234,8 +203,6 @@ public final class ConsoleTest {
                 () -> cancelled.console.readYesNo("已通关? "));
     }
 
-    // ---------- confirm ----------
-
     private static void testConfirm(TestRunner t) {
         t.section("[48] Console：confirm（§4.4 删除确认）");
 
@@ -254,12 +221,9 @@ public final class ConsoleTest {
         prompt.console.confirm("确认删除?");
         t.check(prompt.output().contains("[y/N]"), "★ 提示里标出默认值 [y/N]");
 
-        // EOF 时 confirm 返回 false 而不是抛异常 —— 危险操作不该因为输入结束就执行
         t.check(!new Fixture("").console.confirm("确认删除?"),
                 "★ EOF -> false（不抛异常，绝不默认删除）");
     }
-
-    // ---------- EOF ----------
 
     private static void testEof(TestRunner t) {
         t.section("[49] Console：EOF 处理");
@@ -270,7 +234,6 @@ public final class ConsoleTest {
         Fixture some = new Fixture("1\n");
         t.check(some.console.hasMore(), "有内容时 hasMore() 为 true");
 
-        // 若 EOF 不抛异常，下面的重试循环会疯狂打印警告，测试会挂住
         Fixture eofInt = new Fixture("");
         expectCancelled(t, "★ readInt 遇 EOF -> CancelledException（不死循环）",
                 () -> eofInt.console.readInt("评分: ", 0, 10));
@@ -279,18 +242,14 @@ public final class ConsoleTest {
         expectCancelled(t, "★ readRequired 遇 EOF -> CancelledException",
                 () -> eofLine.console.readRequired("标题: "));
 
-        // 用了一半脚本再 EOF
         Fixture half = new Fixture("abc\n");
         expectCancelled(t, "★ 非法输入后遇 EOF 也要能跳出",
                 () -> half.console.readInt("评分: ", 0, 10));
     }
 
-    // ---------- 换行残留 ----------
-
     private static void testNoLeftoverNewline(TestRunner t) {
         t.section("[50] Console：nextInt 的换行残留（回归）");
 
-        // 用 nextInt() 的话，换行符会留在缓冲里，下一次 readLine 会立刻返回空串
         Fixture f = new Fixture("42\nhello\n");
         t.check(f.console.readInt("n: ", 0, 100) == 42, "读到 42");
         t.check(f.console.readLine("s: ").equals("hello"),
@@ -305,9 +264,6 @@ public final class ConsoleTest {
                 "★ 混用五种读法，字段一个都没错位");
     }
 
-    // ---------- 工具 ----------
-
-    /** 一个 Console + 它写入的缓冲区。脚本用 {@code \n} 分隔每一行输入。 */
     private static final class Fixture {
 
         private final Console console;

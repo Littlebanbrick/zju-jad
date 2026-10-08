@@ -8,7 +8,6 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
-/** Platform 枚举的解析、显示，以及"遍历全部值"的两种正确姿势。 */
 public final class PlatformTest {
 
     private PlatformTest() {
@@ -35,10 +34,6 @@ public final class PlatformTest {
         testEnumSet(t);
     }
 
-    /**
-     * values()：编译器为每个 enum 自动生成，是"遍历全部常量"的标准做法。
-     * 不要在 Platform 里再造一个 all() —— 那是重新发明 JDK。
-     */
     private static void testValues(TestRunner t) {
         t.section("[1b] values()：遍历全部平台");
 
@@ -49,7 +44,6 @@ public final class PlatformTest {
         t.check(all[1] == Platform.EPIC, "第二个是 EPIC");
         t.check(all[4] == Platform.OTHER, "末个是 OTHER");
 
-        // 每次返回新数组（防御性副本）：调用方改它不会污染枚举
         t.check(Platform.values() != Platform.values(), "★ values() 每次返回新数组");
         Platform[] scratch = Platform.values();
         scratch[0] = null;
@@ -66,7 +60,6 @@ public final class PlatformTest {
         t.check(count == 5, "for-each 迭代到 5 个");
         t.check(sawXbox, "迭代过程中能看到 XBOX");
 
-        // 需要 List 语义时，就地包一层，不要在 Platform 里缓存
         t.check(Arrays.asList(Platform.values()).indexOf(Platform.GOG) == 2,
                 "Arrays.asList(values()).indexOf(GOG) == 2");
         List<Platform> copy = new ArrayList<>(Arrays.asList(Platform.values()));
@@ -74,17 +67,11 @@ public final class PlatformTest {
         t.check(copy.size() == 4, "想改就自己包一个可变副本");
         t.check(Platform.values().length == 5, "★ 改副本不影响 values() 本身");
 
-        // 反面对照：List.of 是"null 敌意"的，连 contains(null) 都抛 NPE，
-        // 所以它不适合做成员判断的容器。
         t.expectThrows(NullPointerException.class,
                 "★ 反面对照：List.of(values()).contains(null) 抛 NPE",
                 () -> List.of(Platform.values()).contains(null));
     }
 
-    /**
-     * EnumSet：需要"集合语义 + 成员判断"时用它。
-     * 内部是位掩码，contains 是 O(1)，而且对 null / 错误类型都安全返回 false。
-     */
     private static void testEnumSet(TestRunner t) {
         t.section("[1c] EnumSet：需要成员判断时用它");
 

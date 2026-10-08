@@ -1,16 +1,5 @@
 package gamelib.test;
 
-/**
- * 测试入口。不是程序入口 —— 程序入口是 {@link gamelib.Main}（菜单）。
- *
- * <p>运行：
- * <pre>
- *   ./test.sh
- *   java -cp out gamelib.test.SelfTest
- * </pre>
- *
- * <p>加了新测试类，只在这里补一行 {@code XxxTest.run(t);}。
- */
 public final class SelfTest {
 
     private SelfTest() {
@@ -41,7 +30,6 @@ public final class SelfTest {
         }
     }
 
-    /** 一个套件崩了不该掩盖其他套件的结果，所以逐个兜住。 */
     private static void runSafely(TestRunner t, String name, Runnable suite) {
         try {
             suite.run();

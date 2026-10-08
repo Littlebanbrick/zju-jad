@@ -8,18 +8,6 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * GameFormatter 的测试。
- *
- * <p>期望的整行字符串直接照抄 §2 的示例输出，所以格式是<b>逐字符锁定</b>的：
- * <pre>
- *   共 2 款游戏
- *   1. Elden Ring | Steam | ¥298 | 120h | 评分 10 | 已通关 | 神作，DLC快出！
- *   2. GTA5       | Epic  | ¥0   | 30h  | 评分 8  | 已通关 | Epic白嫖
- * </pre>
- *
- * <p>中文对齐单独一组：不能只靠"看起来对"，要用 {@link GameFormatter#width} 量出来。
- */
 public final class GameFormatterTest {
 
     private GameFormatterTest() {
@@ -33,8 +21,6 @@ public final class GameFormatterTest {
         testListing(t);
         testBriefAndNumbers(t);
     }
-
-    // ---------- width ----------
 
     private static void testWidth(TestRunner t) {
         t.section("[36] GameFormatter.width");
@@ -51,8 +37,6 @@ public final class GameFormatterTest {
         t.check(GameFormatter.width("「」") == 4, "中文引号 -> 4");
     }
 
-    // ---------- pad ----------
-
     private static void testPad(TestRunner t) {
         t.section("[37] GameFormatter.pad");
 
@@ -65,13 +49,10 @@ public final class GameFormatterTest {
         t.check(GameFormatter.pad("巫师3", 10).equals("巫师3     "),
                 "★ \"巫师3\" 是 5 列 -> 补 5 个空格");
 
-        // 补齐后显示宽度必须正好等于目标
         t.check(GameFormatter.width(GameFormatter.pad("神作", 6)) == 6, "补齐后宽度 == 6");
         t.check(GameFormatter.width(GameFormatter.pad("abc", 8)) == 8, "补齐后宽度 == 8");
         t.check(GameFormatter.width(GameFormatter.pad("abcdef", 3)) == 6, "超宽时宽度不变");
     }
-
-    // ---------- lines ----------
 
     private static void testLines(TestRunner t) {
         t.section("[38] GameFormatter.lines");
@@ -92,20 +73,16 @@ public final class GameFormatterTest {
                         "GTA5       | Epic  | ¥0   | 30h  | 评分 8  | 已通关 | Epic白嫖"),
                 "第 2 行与 §2 示例逐字符一致 -> " + lines.get(1));
 
-        // 未通关 + 空笔记
         List<String> one = GameFormatter.lines(List.of(
                 game("Hades", Platform.STEAM, 70.0, 40.0, 9, false, "")));
         t.check(one.get(0).equals("Hades | Steam | ¥70 | 40h | 评分 9  | 未通关"),
                 "★ 笔记为空时不留悬空的 \" | \" -> " + one.get(0));
 
-        // 平台用显示名（label），不是 name()
         List<String> platform = GameFormatter.lines(List.of(
                 game("A", Platform.XBOX, 1.0, 1.0, 5, false, "")));
         t.check(platform.get(0).contains("Xbox"), "平台用 label（Xbox）而不是 XBOX");
         t.check(!platform.get(0).contains("XBOX"), "不出现常量名");
     }
-
-    // ---------- 中文对齐 ----------
 
     private static void testChineseAlignment(TestRunner t) {
         t.section("[39] 中文标题对齐（用显示宽度量，不靠肉眼）");
@@ -118,17 +95,13 @@ public final class GameFormatterTest {
         List<String> lines = GameFormatter.lines(games);
         t.check(lines.size() == 3, "三条");
 
-        // 前三列（含分隔符）的显示宽度必须一致，表格才不歪
         int first = alignedPrefixWidth(lines.get(0));
         t.check(first > 0, "能定位到前 4 个分隔符");
         t.check(alignedPrefixWidth(lines.get(1)) == first, "★ ASCII 行的列边界一致");
         t.check(alignedPrefixWidth(lines.get(2)) == first, "★ 中文行的列边界也一致");
 
-        // 中文标题必须按显示宽度补齐
         t.check(lines.get(0).startsWith("巫师3 "), "「巫师3」后面开始补空格");
 
-        // ★ 对齐看的是「显示宽度」，不是字符下标 ——
-        // 中文行字符数少但列数相同，用 indexOf('|') 比是错的
         int pipeCol0 = GameFormatter.width(lines.get(0).substring(0, lines.get(0).indexOf('|')));
         int pipeCol1 = GameFormatter.width(lines.get(1).substring(0, lines.get(1).indexOf('|')));
         int pipeCol2 = GameFormatter.width(lines.get(2).substring(0, lines.get(2).indexOf('|')));
@@ -138,11 +111,8 @@ public final class GameFormatterTest {
         t.check(lines.get(0).indexOf('|') != lines.get(1).indexOf('|'),
                 "（反面对照：中文行的字符下标本来就比 ASCII 行小，这正说明不能用下标比）");
 
-        // 「评分」也是双宽，两个汉字 -> 4 列
         t.check(GameFormatter.width("评分") == 4, "「评分」是 4 列");
     }
-
-    // ---------- listing ----------
 
     private static void testListing(TestRunner t) {
         t.section("[40] GameFormatter.listing");
@@ -161,7 +131,6 @@ public final class GameFormatterTest {
         t.check(listing.contains("2. GTA5       | Epic  | ¥0   | 30h  | 评分 8  | 未通关"),
                 "第 2 行带编号");
 
-        // ★ 两位数编号要和一位数对齐
         List<Game> many = new ArrayList<>();
         for (int i = 1; i <= 12; i++) {
             many.add(game("Game" + i, Platform.STEAM, 1.0, 1.0, 5, false, ""));
@@ -176,8 +145,6 @@ public final class GameFormatterTest {
         t.check(pos1 == pos12, "★ 编号 1 和 12 之后标题起始位置相同（1 -> " + pos1
                 + "，12 -> " + pos12 + "）");
     }
-
-    // ---------- brief 与数值格式 ----------
 
     private static void testBriefAndNumbers(TestRunner t) {
         t.section("[41] GameFormatter.brief 与数值格式");
@@ -203,19 +170,10 @@ public final class GameFormatterTest {
         t.check(zero.get(0).contains("0h"), "0.0 -> \"0h\"");
         t.check(zero.get(0).contains("评分 0 "), "评分 0 补到两位");
 
-        // 单条时不留多余空格
         t.check(whole.get(0).equals("A | Steam | ¥298 | 120h | 评分 5  | 未通关"),
                 "单条无多余空格 -> " + whole.get(0));
     }
 
-    // ---------- 工具 ----------
-
-    /**
-     * 第 4 个 {@code " | "} 为止的显示宽度。
-     *
-     * <p>用来判断"表格歪没歪"：所有行的这个值相等，说明前 4 列的边界对齐了。
-     * 这样测的是对齐这件事本身，而不是锁死具体补了几个空格。
-     */
     private static int alignedPrefixWidth(String line) {
         int seen = 0;
         for (int i = 0; i < line.length(); i++) {

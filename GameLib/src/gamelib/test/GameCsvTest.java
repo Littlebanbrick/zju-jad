@@ -10,43 +10,6 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * GameCsv 的测试 —— <b>这份文件同时是 GameCsv 的接口规格</b>。
- *
- * <p>它要调用的 API（你先写空方法体让它能编译，再逐个填实现）：
- * <pre>
- * package gamelib.io;
- *
- * public final class GameCsv {
- *     public static final List&lt;String&gt; HEADER;   // 11 列，见下
- *
- *     public static List&lt;String&gt; toFields(Game g);
- *     public static Game fromFields(List&lt;String&gt; fields, int lineNumber);
- *     public static String toCsvText(List&lt;Game&gt; games);
- *     public static List&lt;Game&gt; parseCsvText(String text);
- * }
- * </pre>
- *
- * <p><b>11 列，顺序如下</b>（{@code HEADER} 必须恰好是这些字符串）：
- * <pre>
- * title, platform, genre, purchase_price, purchase_date,
- * completed, completed_date, playtime_hours, rating, note, hidden
- * </pre>
- *
- * <p><b>约定</b>：
- * <ol>
- *   <li>{@code platform} 写出用 {@code name()}（如 {@code STEAM}）；
- *       读入走 {@code Platform.fromString}，所以 {@code Steam} 也认</li>
- *   <li>{@code completed} 是<b>派生列</b>（{@code isCompleted() ? "y" : "n"}），
- *       <b>读入时忽略</b>；判定只以 {@code completed_date} 为准</li>
- *   <li>可空字段用空串表示：{@code completed_date} 为 null 时写 {@code ""}</li>
- *   <li>任何解析失败都抛 {@link InvalidGameDataException}，消息含
- *       {@code "第 N 行"}（N 是原始文本里的物理行号，第 1 行是表头）</li>
- *   <li>{@code toCsvText} 以 BOM 开头；{@code parseCsvText} 负责剥掉它</li>
- *   <li>{@code parseCsvText} 要求表头与 {@code HEADER} <b>逐位置完全一致</b>。
- *       顺序被调换时明确报错，不静默读错列（不迁就手工编辑过的文件）</li>
- * </ol>
- */
 public final class GameCsvTest {
 
     private GameCsvTest() {
@@ -60,8 +23,6 @@ public final class GameCsvTest {
         testDocumentRoundTrip(t);
         testParseRobustness(t);
     }
-
-    // ---------- 表头 ----------
 
     private static void testHeader(TestRunner t) {
         t.section("[23] GameCsv.HEADER");
@@ -81,8 +42,6 @@ public final class GameCsvTest {
         t.check(GameCsv.HEADER.contains("cover_image_path") == false,
                 "不含 cover_image_path（Game 里没有这个字段）");
     }
-
-    // ---------- Game -> 字段 ----------
 
     private static void testToFields(TestRunner t) {
         t.section("[24] toFields：Game -> 11 个字段");
@@ -118,14 +77,11 @@ public final class GameCsvTest {
         fresh.hide();
         t.check(GameCsv.toFields(fresh).get(10).equals("true"), "隐藏后 hidden = true");
 
-        // 刁钻内容必须靠 Csv 转义，toFields 本身不做转义
         Game nasty = new Game("A", Platform.GOG, "RPG", 1.0, LocalDate.of(2020, 1, 1),
                 5, 1.0, "神作\", DLC别买");
         t.check(GameCsv.toFields(nasty).get(9).equals("神作\", DLC别买"),
                 "toFields 返回原始值，转义交给 Csv.formatRecord");
     }
-
-    // ---------- 字段 -> Game ----------
 
     private static void testFromFields(TestRunner t) {
         t.section("[25] fromFields：字段 -> Game（方案 B 的补盖章路径）");
@@ -146,41 +102,33 @@ public final class GameCsvTest {
         t.check(g.getCompletedDate().equals(LocalDate.of(2024, 3, 15)), "completedDate 完整");
         t.check(!g.isHidden(), "hidden = false");
 
-        // platform 列接受 label 形式（人手改过 Excel 的情况）
         Game labeled = GameCsv.fromFields(List.of(
                 "A", "Steam", "RPG", "1.0", "2020-01-01",
                 "n", "", "1.0", "5", "", "false"), 3);
         t.check(labeled.getPlatform() == Platform.STEAM,
                 "★ platform 列写 \"Steam\"（label）也能读");
 
-        // 未通关：completed_date 为空
         t.check(!labeled.isCompleted(), "completed_date 空 -> 未通关");
         t.check(labeled.getCompletedDate() == null, "completedDate 是 null 而不是空 LocalDate");
 
-        // ★ 方案 B 的核心：completed 列说 y 但日期为空 -> 以日期为准
         Game liar = GameCsv.fromFields(List.of(
                 "A", "STEAM", "RPG", "1.0", "2020-01-01",
                 "y", "", "1.0", "5", "", "false"), 4);
         t.check(!liar.isCompleted(),
                 "★ completed 列说 y 但日期为空 -> 仍视为未通关（第 6 列读入时忽略）");
 
-        // 反过来：completed 列说 n 但有日期 -> 也算已通关
         Game reverse = GameCsv.fromFields(List.of(
                 "B", "STEAM", "RPG", "1.0", "2020-01-01",
                 "n", "2024-06-01", "1.0", "5", "", "false"), 5);
         t.check(reverse.isCompleted(), "★ completed 列说 n 但有日期 -> 已通关");
 
-        // hidden
         Game hiddenGame = GameCsv.fromFields(List.of(
                 "C", "GOG", "RPG", "1.0", "2020-01-01",
                 "n", "", "1.0", "5", "", "true"), 6);
         t.check(hiddenGame.isHidden(), "hidden = true -> 已隐藏");
 
-        // 空笔记
         t.check(labeled.getNotes().isEmpty(), "note 空串 -> 空串（不是 null）");
     }
-
-    // ---------- 错误报告 ----------
 
     private static void testFromFieldsErrors(TestRunner t) {
         t.section("[26] fromFields 的错误报告：必须带行号");
@@ -190,9 +138,6 @@ public final class GameCsvTest {
                         "A", "STEAM", "RPG", "abc", "2020-01-01",
                         "n", "", "1.0", "5", "", "false"), 7));
 
-        // 下面三条是 Game 的「领域规则」（价格非负、标题非空、日期非未来），不是 CSV 的
-        // 「格式问题」—— 没有哪一列单独负责，所以只断言行号，不强求列名（也不强求措辞）。
-        // 列名只对单列转换失败（如 "abc" 解析成数字）才有意义。
         expectInvalidAt(t, "价格是负数", 7, () ->
                 GameCsv.fromFields(List.of(
                         "A", "STEAM", "RPG", "-1.0", "2020-01-01",
@@ -243,13 +188,11 @@ public final class GameCsvTest {
                         "A", "STEAM", "RPG", "1.0", LocalDate.now().plusDays(1).toString(),
                         "n", "", "1.0", "5", "", "false"), 14));
 
-        // Game.markCompleted 的一致性检查也要带上行号
         expectInvalidWith(t, "通关日期早于购买日期", 15, "通关日期", () ->
                 GameCsv.fromFields(List.of(
                         "A", "STEAM", "RPG", "1.0", "2020-01-01",
                         "y", "2019-01-01", "1.0", "5", "", "false"), 15));
 
-        // 列数不对通常意味着文件被手工截断
         expectInvalidWith(t, "字段太少", 16, "11", () ->
                 GameCsv.fromFields(List.of("A", "STEAM", "RPG"), 16));
         expectInvalidWith(t, "字段太多", 17, "11", () ->
@@ -257,8 +200,6 @@ public final class GameCsvTest {
                         "A", "STEAM", "RPG", "1.0", "2020-01-01",
                         "n", "", "1.0", "5", "", "false", "多出来的"), 17));
     }
-
-    // ---------- 文档级 round-trip ----------
 
     private static void testDocumentRoundTrip(TestRunner t) {
         t.section("[27] toCsvText / parseCsvText：文档级 round-trip");
@@ -287,7 +228,7 @@ public final class GameCsvTest {
                 }
             }
         }
-        // Game.equals 只比 key，所以这里逐字段 dump 对比，才能抓出"字段丢了但 key 对"的情况
+
         t.check(allSame, "★ round-trip：全部字段逐一还原（不是只比 key）" + firstDiff);
 
         t.check(back.get(0).isCompleted()
@@ -301,46 +242,37 @@ public final class GameCsvTest {
         t.check(back.get(4).getNotes().isEmpty(), "空笔记回来仍是空串");
         t.check(back.get(5).getPurchasePrice() == 0.0, "0 元记录的价格回来");
 
-        // 空库
         String emptyText = GameCsv.toCsvText(List.of());
         t.check(emptyText.startsWith(Csv.BOM), "空库也有 BOM");
         t.check(GameCsv.parseCsvText(emptyText).isEmpty(), "空库 round-trip 得到空列表");
 
-        // 二次 round-trip 必须稳定（幂等）
         String text2 = GameCsv.toCsvText(back);
         t.check(text2.equals(text), "★ 二次导出与首次逐字节相同（幂等）");
     }
 
-    // ---------- 读入的健壮性 ----------
-
     private static void testParseRobustness(TestRunner t) {
         t.section("[28] parseCsvText 的健壮性");
 
-        // 列顺序调换：本项目要求严格按 HEADER 顺序，顺序错就报错，不迁就手工编辑
         String swapped = "note,title,platform,genre,purchase_price,purchase_date,"
                 + "completed,completed_date,playtime_hours,rating,hidden\n"
                 + "我的笔记,Elden Ring,Steam,ARPG,298.0,2022-03-01,y,2024-03-15,120.0,10,false";
         expectInvalidWith(t, "★ 列顺序调换 -> 明确报「顺序错误」，而不是静默读错列",
                 1, "顺序", () -> GameCsv.parseCsvText(swapped));
 
-        // 没有 BOM 也能读
         String noBom = Csv.formatRecord(GameCsv.HEADER) + "\n"
                 + "A,STEAM,RPG,1.0,2020-01-01,n,,1.0,5,,false";
         t.check(GameCsv.parseCsvText(noBom).size() == 1, "★ 没有 BOM 的文件也能读");
 
-        // 空行跳过
         String withBlanks = Csv.formatRecord(GameCsv.HEADER) + "\n"
                 + "\n"
                 + "A,STEAM,RPG,1.0,2020-01-01,n,,1.0,5,,false\n"
                 + "\n";
         t.check(GameCsv.parseCsvText(withBlanks).size() == 1, "★ 空行被跳过");
 
-        // 只有表头
         t.check(GameCsv.parseCsvText(Csv.formatRecord(GameCsv.HEADER)).isEmpty(),
                 "只有表头 -> 空列表");
         t.check(GameCsv.parseCsvText("").isEmpty(), "空文本 -> 空列表");
 
-        // 行号是物理行号：表头在第 1 行，空行也计数
         String badAtLine4 = Csv.formatRecord(GameCsv.HEADER) + "\n"
                 + "A,STEAM,RPG,1.0,2020-01-01,n,,1.0,5,,false\n"
                 + "\n"
@@ -348,21 +280,13 @@ public final class GameCsvTest {
         expectInvalidWith(t, "★ 行号是物理行号（含空行）", 4, "purchase_price",
                 () -> GameCsv.parseCsvText(badAtLine4));
 
-        // 缺列
         expectInvalidWith(t, "★ 缺列必须明确报错", 1, "purchase_price", () ->
                 GameCsv.parseCsvText("title,platform,genre\nElden Ring,Steam,ARPG"));
 
-        // 首行不是表头
         expectInvalidWith(t, "首行不是表头", 1, "表头", () ->
                 GameCsv.parseCsvText("Elden Ring,Steam,ARPG,298,2022-03-01,y,,120,10,,false"));
     }
 
-    // ---------- 工具 ----------
-
-    /**
-     * 逐字段快照。不能只靠 {@code Game.equals} —— 它只比 key，
-     * 字段全丢了也会判相等。
-     */
     private static String dump(Game g) {
         return g.key()
                 + "|genre=" + g.getGenre()
@@ -376,13 +300,6 @@ public final class GameCsvTest {
                 + "|hidden=" + g.isHidden();
     }
 
-    /**
-     * 只断言行号，不管措辞和列名。
-     *
-     * <p>用于 Game 的领域规则错误（价格非负、标题非空、日期非未来）：
-     * 这些规则由 {@code Game} 守，一次构造失败无法归到某一列，
-     * 所以列名不作为要求 —— 否则测试会变成在锁定实现的消息格式。
-     */
     private static void expectInvalidAt(TestRunner t, String what, int line, Runnable action) {
         try {
             action.run();
@@ -396,7 +313,6 @@ public final class GameCsvTest {
         }
     }
 
-    /** 断言抛 InvalidGameDataException，且消息里同时含行号和某个关键词。 */
     private static void expectInvalidWith(TestRunner t, String what, int line,
                                           String mustContain, Runnable action) {        try {
             action.run();
@@ -411,7 +327,6 @@ public final class GameCsvTest {
         }
     }
 
-    /** 6 款游戏，覆盖通关闭环、隐藏、空笔记、带引号逗号的笔记、0 元。 */
     private static List<Game> sampleGames() {
         List<Game> games = new ArrayList<>();
 
