@@ -6,8 +6,11 @@ import gamelib.model.Game;
 import gamelib.model.InvalidGameDataException;
 import gamelib.model.Platform;
 import gamelib.store.GameLibrary;
+import gamelib.store.ImportReport;
 
 import java.io.UncheckedIOException;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
@@ -110,7 +113,18 @@ public final class Menu {
 
     private void doAdd() {
         console.println("=> 添加游戏");
+        console.println(" 1) 手动录入");
+        console.println(" 2) 从 CSV 文件批量导入");
+        int choice = console.readInt("> ", 1, 2);
 
+        if (choice == 1) {
+            doAddManual();
+        } else {
+            doImportCsv();
+        }
+    }
+
+    private void doAddManual() {
         Platform platform = Platform.fromString(
                 console.readRequired("平台 (" + Platform.choices() + "): "));
         String title = console.readRequired("标题: ");
@@ -131,6 +145,28 @@ public final class Menu {
 
         lib.add(game);
         console.println("【提示】已成功入库：" + GameFormatter.brief(game));
+    }
+
+    private void doImportCsv() {
+        String raw = console.readRequired("CSV 文件路径: ");
+
+        Path source;
+        try {
+            source = Path.of(raw);
+        } catch (InvalidPathException e) {
+            console.println("【警告】路径不合法：" + raw);
+            return;
+        }
+
+        List<Game> parsed = files.importCsv(source);
+        ImportReport report = lib.addAll(parsed);
+
+        console.println("导入完成：新增 " + report.added() + " 款，跳过 " + report.duplicates() + " 款重复"
+                + (report.skipped() > 0 ? "，忽略 " + report.skipped() + " 条无效记录" : ""));
+        if (!report.duplicateTitles().isEmpty()) {
+            console.println("  重复：" + String.join("、", report.duplicateTitles()));
+        }
+        console.println("  当前库里共 " + lib.size() + " 款游戏。");
     }
 
     private void doList() {

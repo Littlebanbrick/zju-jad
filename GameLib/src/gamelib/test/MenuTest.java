@@ -1,5 +1,6 @@
 package gamelib.test;
 
+import gamelib.io.GameCsv;
 import gamelib.io.LibraryFiles;
 import gamelib.io.LoadReport;
 import gamelib.model.Game;
@@ -18,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Scanner;
 
 public final class MenuTest {
@@ -34,6 +36,7 @@ public final class MenuTest {
         testStats(t);
         testPersistence(t);
         testSaveFailureKeepsRunning(t);
+        testBatchImport(t);
     }
 
     private static void testStartupAndExit(TestRunner t) {
@@ -54,7 +57,8 @@ public final class MenuTest {
     private static void testAdd(TestRunner t) {
         t.section("[52] Menu：添加游戏（§4.1）");
 
-        String script = "1\nSteam\nElden Ring\nARPG\n298\n2022-03-01\ny\n120\n10\n神作，DLC快出！\n";
+        // 1 -> 添加游戏，1 -> 手动录入
+        String script = "1\n1\nSteam\nElden Ring\nARPG\n298\n2022-03-01\ny\n120\n10\n神作，DLC快出！\n";
         Fixture f = fixture(new GameLibrary(), script);
         f.run();
 
@@ -70,7 +74,7 @@ public final class MenuTest {
         t.check(g.getCompletedDate() != null, "completedDate 非 null");
 
         Fixture no = fixture(new GameLibrary(),
-                "1\nEpic\nGTA5\nAction\n0\n2020-05-14\nn\n25\n8\n\n");
+                "1\n1\nEpic\nGTA5\nAction\n0\n2020-05-14\nn\n25\n8\n\n");
         no.run();
         Game gta = no.lib.find("GTA5", Platform.EPIC).orElseThrow();
         t.check(!gta.isCompleted(), "★ 回答 n -> 未通关");
@@ -78,15 +82,15 @@ public final class MenuTest {
         t.check(gta.getNotes().isEmpty(), "笔记回车 -> 空串");
 
         Fixture dup = fixture(new GameLibrary(),
-                "1\nSteam\nElden Ring\nARPG\n298\n2022-03-01\nn\n120\n10\n\n"
-                        + "1\nSteam\nElden Ring\nARPG\n1\n2022-03-01\nn\n1\n1\n\n");
+                "1\n1\nSteam\nElden Ring\nARPG\n298\n2022-03-01\nn\n120\n10\n\n"
+                        + "1\n1\nSteam\nElden Ring\nARPG\n1\n2022-03-01\nn\n1\n1\n\n");
         dup.run();
         t.check(dup.output().contains("已存在"), "★ 重复入库给出提示");
         t.check(dup.lib.size() == 1, "★ 重复后库里仍只有 1 条");
         t.check(dup.output().contains("主菜单"), "★ 重复是警告不是崩溃，回到了菜单");
 
         Fixture bad = fixture(new GameLibrary(),
-                "1\nSteam\nHades\nRoguelike\nabc\n70\n2021-01-01\nn\n-5\n40\n99\n9\n\n");
+                "1\n1\nSteam\nHades\nRoguelike\nabc\n70\n2021-01-01\nn\n-5\n40\n99\n9\n\n");
         bad.run();
         t.check(bad.output().contains("【警告】"), "★ 非法输入打出了警告");
         t.check(bad.lib.size() == 1, "★ 重问后仍然入库成功");
@@ -94,7 +98,7 @@ public final class MenuTest {
         t.check(hades.getPurchasePrice() == 70.0, "价格最终是 70");
         t.check(hades.getRating() == 9, "评分最终是 9（99 被拒后重问）");
 
-        Fixture cancel = fixture(new GameLibrary(), "1\n\n");
+        Fixture cancel = fixture(new GameLibrary(), "1\n1\n\n");
         cancel.run();
         t.check(cancel.output().contains("已取消"), "★ 必填字段留空 -> 已取消");
         t.check(cancel.lib.isEmpty(), "库仍然是空的");
@@ -351,6 +355,90 @@ public final class MenuTest {
         t.check(out.contains("感谢使用"), "第二次选 CSV 成功后才退出");
         t.check(lib.size() == 1, "★ 库里的数据还在（没被清空）");
         t.check(Files.exists(broken.csvPath()), "第二次保存 CSV 成功");
+    }
+
+    private static void testBatchImport(TestRunner t) {
+        t.section("[59] Menu：批量导入（§4.1）");
+
+        Path dir = tempDir();
+        Path incoming = dir.resolve("incoming.csv");
+        writeCsv(incoming, List.of(
+                game("Elden Ring", Platform.STEAM, 298.0, 10),
+                game("GTA5", Platform.EPIC, 0.0, 8),
+                game("Hades", Platform.STEAM, 70.0, 9)));
+
+        // 库里已经有 Elden Ring -> 导入 3 条，1 条重复
+        Fixture f = new Fixture(dir, library(game("Elden Ring", Platform.STEAM, 298.0, 10)),
+                "1\n2\n" + incoming + "\n");
+        f.run();
+
+        String out = f.output();
+        t.check(out.contains("从 CSV 文件批量导入"), "菜单里列出了批量导入选项");
+        t.check(out.contains("导入完成"), "打印了导入回执");
+        t.check(out.contains("新增 2 款"), "★ 新增 2 款 -> " + firstLineWith(out, "导入完成"));
+        t.check(out.contains("跳过 1 款重复"), "★ 跳过 1 款重复");
+        t.check(out.contains("Elden Ring | Steam"), "★ 列出了是哪一款重复");
+        t.check(out.contains("当前库里共 3 款游戏"), "报告了导入后的总数");
+
+        t.check(f.lib.size() == 3, "★ 库里最终 3 款");
+        t.check(f.lib.find("GTA5", Platform.EPIC).isPresent(), "导入进来的能查到");
+        t.check(f.lib.find("Hades", Platform.STEAM).isPresent(), "第二条也进来了");
+        t.check(f.lib.find("Elden Ring", Platform.STEAM).orElseThrow()
+                        .getPurchasePrice() == 298.0,
+                "★ 重复那条没有覆盖库里原有的数据");
+        t.check(out.contains("主菜单"), "导入后回到菜单");
+
+        // 文件不存在：UncheckedIOException 被 handle 接住，程序不崩
+        Fixture missing = new Fixture(tempDir(), new GameLibrary(),
+                "1\n2\n" + dir.resolve("nope.csv") + "\n");
+        missing.run();
+        t.check(missing.output().contains("【错误】"), "★ 文件不存在时打错误信息");
+        t.check(missing.output().contains("主菜单"), "★ 没崩，回到了菜单");
+
+        // CSV 内容坏了：InvalidGameDataException 带行号
+        Path broken = dir.resolve("broken.csv");
+        writeRaw(broken, "title,platform\nElden Ring,Steam\n");
+        Fixture badContent = new Fixture(tempDir(), new GameLibrary(), "1\n2\n" + broken + "\n");
+        badContent.run();
+        t.check(badContent.output().contains("【警告】"), "★ 格式不对时打警告");
+        t.check(badContent.output().contains("第 1 行"), "★ 警告里带行号");
+
+        // 路径里含 NUL -> InvalidPathException，被局部 catch 住
+        Fixture badPath = new Fixture(tempDir(), new GameLibrary(), "1\n2\na\u0000b\n");
+        badPath.run();
+        t.check(badPath.output().contains("路径不合法") || badPath.output().contains("【错误】"),
+                "★ 非法路径不崩");
+        t.check(badPath.output().contains("主菜单"), "非法路径后回到菜单");
+
+        // 空 CSV（只有表头）-> 新增 0，不报错
+        Path headerOnly = dir.resolve("empty.csv");
+        writeCsv(headerOnly, List.of());
+        Fixture none = new Fixture(tempDir(), new GameLibrary(), "1\n2\n" + headerOnly + "\n");
+        none.run();
+        t.check(none.output().contains("新增 0 款"), "★ 空 CSV -> 新增 0 款");
+        t.check(none.output().contains("跳过 0 款重复"), "没有重复");
+    }
+
+    private static void writeCsv(Path path, List<Game> games) {
+        writeRaw(path, GameCsv.toCsvText(games));
+    }
+
+    private static void writeRaw(Path path, String text) {
+        try {
+            Files.writeString(path, text, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    /** 取出输出里含某个关键词的第一行，断言失败时能看清实际内容。 */
+    private static String firstLineWith(String output, String keyword) {
+        for (String line : output.lines().toList()) {
+            if (line.contains(keyword)) {
+                return line.strip();
+            }
+        }
+        return "（没找到含「" + keyword + "」的行）";
     }
 
     private static final class Fixture {
