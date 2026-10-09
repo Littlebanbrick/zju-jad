@@ -3,8 +3,12 @@ package gamelib.model;
 import java.io.Serializable;
 import java.time.LocalDate;
 
+// .dat不是一种格式，意思是“二进制数据，具体内容程序自己定义”
+// 如果 Game 不实现 Serializable 接口，就会因为无法序列化而无法写入.dat文件
+// 同时，Game 所有字段也必须实现 Serializable
 public class Game implements Serializable {
     private static final long serialVersionUID = 1L;
+
     public static final int MIN_RATING = 0;
     public static final int MAX_RATING = 10;
 
@@ -13,6 +17,17 @@ public class Game implements Serializable {
 
     private final String genre;
     private final double purchasePrice;
+
+    // 关于 LocalDate：
+    // 只有日期，没有时间和时区。实例不可变（和String类似）
+    // 例如：LocalDate.of(2023, 5, 1) 表示 2023-05-01
+    // LocalDate.now() 基于操作系统时间返回当前日期，无需联网
+    // LocalDate.toString() 返回 ISO-8601 格式的字符串，例如 "2023-05-01"
+    // LocalDate.parse("2023-05-01") 将 ISO-8601 格式的字符串解析为 LocalDate
+    // 比较必须用方法，比如 isBefore()、isAfter()、isEqual()
+    // 可以为null
+    // 有getMonth()、getDayOfMonth()等方法获取年月日
+    // getMonthValue = 3; getMonth = MARCH; getDayOfMonth = 15; getDayOfWeek = WEDNESDAY
     private final LocalDate purchaseDate;
     private LocalDate completedDate;
     private double playtimeHours;
@@ -177,6 +192,22 @@ public class Game implements Serializable {
 
     @Override
     public boolean equals(Object o) {
+        // instanceof的两种形态：
+        // 1. object instanceof ClassName
+        //    返回 true/false，判断 object 是否是 ClassName 的实例
+        // 2. object instanceof ClassName variableName
+        //    如果 object 是 ClassName 的实例，则把 object 强制转换为 ClassName，
+        //    并赋值给 variableName，返回 true；否则返回 false
+        //
+        // 这里的写法等价于：
+        // if (!(o instanceof Game)) {
+        //     return false;
+        // }
+        // Game other = (Game) o;
+        //
+        // 问题来了：为什么 o 已经是 Game 的实例了，还要再强制转换为 Game？
+        // 因为 o 声明的类型是 Object，Object 没有 key() 方法（编译器只看声明，不看运行时），
+        // 所以必须先转换为 Game 才能调用 key() 方法
         if (!(o instanceof Game other)) {
             return false;
         }
@@ -184,6 +215,10 @@ public class Game implements Serializable {
     }
 
     @Override
+    // hashCode() 原本用于返回对象的哈希值
+    // 这里 hashCode 应与 equals() 保持一致，
+    //      即如果两个对象 equals() 返回 true，则它们的 hashCode() 必须相等
+    // 故只与 key() 相关
     public int hashCode() {
         return key().hashCode();
     }
