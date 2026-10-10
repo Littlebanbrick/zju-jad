@@ -8,8 +8,11 @@ import java.util.List;
 import java.time.LocalDate;
 
 public final class GameCsv {
+    // 同样的，GameCsv 也是一个“工具类”，用于处理 Game 对象和 CSV 之间的转换
+    // 因此构造器private
     private GameCsv() {}
 
+    // csv文件的表头字段顺序和名称是固定的，定义为常量
     public static final List<String> HEADER = List.of(
         "title",
         "platform",
@@ -83,7 +86,23 @@ public final class GameCsv {
             throw new InvalidGameDataException("字段数可能不对，第 " + lineNumber + " 行: " + e.getMessage());
         }
 
+        // 这里使用正则表达式检查 purchasePriceStr 是否是一个数字（整数或小数）
+        // 简单的正则语法：
+        // \d  匹配一个数字（0-9）
+        // \d+ 匹配一个或多个数字
+        // ()? 匹配括号内的内容 0 次或 1 次
+        // \.  匹配小数点（需要转义，因为 . 在正则中有特殊含义）
+        // 
+        // matches() 方法用于检查字符串是否匹配给定的正则表达式
         if (!purchasePriceStr.matches("\\d+(\\.\\d+)?")) {
+            throw new InvalidGameDataException("第 " + lineNumber + " 行 purchase_price 不是数字: " + purchasePriceStr);
+        }
+
+        double purchasePrice;
+        try {
+            // parseDouble() 是 Double 类的静态方法，用于将字符串解析为 double 类型的数值
+            purchasePrice = Double.parseDouble(purchasePriceStr);
+        } catch (InvalidGameDataException e) {
             throw new InvalidGameDataException("第 " + lineNumber + " 行 purchase_price 不是数字: " + purchasePriceStr);
         }
 
@@ -94,8 +113,9 @@ public final class GameCsv {
             throw new InvalidGameDataException("字段数可能不对，第 " + lineNumber + " 行: " + e.getMessage());
         }
 
+        LocalDate purchaseDate;
         try {
-            LocalDate.parse(purchaseDateStr);
+            purchaseDate = LocalDate.parse(purchaseDateStr);
         } catch (Exception e) {
             throw new InvalidGameDataException("第 " + lineNumber + " 行 purchase_date 格式不合法: " + purchaseDateStr);
         }
@@ -112,6 +132,7 @@ public final class GameCsv {
         }
         double playtimeHours;
         try {
+            // parseDouble() 是 Double 类的静态方法，用于将字符串解析为 double 类型的数值
             playtimeHours = Double.parseDouble(playtimeHoursStr);
         } catch (InvalidGameDataException e) {
             throw new InvalidGameDataException("第 " + lineNumber + " 行 playtime_hours 不是数字: " + playtimeHoursStr);
@@ -125,6 +146,7 @@ public final class GameCsv {
         }
         int rating;
         try {
+            // parseInt() 方法用于将字符串解析为 int 类型的数值
             rating = Integer.parseInt(ratingStr);
         } catch (NumberFormatException e) {
             throw new InvalidGameDataException("第 " + lineNumber + " 行 rating 不是整数: " + ratingStr);
@@ -143,8 +165,8 @@ public final class GameCsv {
                 title,
                 platform,
                 genre,
-                Double.parseDouble(purchasePriceStr),
-                java.time.LocalDate.parse(purchaseDateStr),
+                purchasePrice,
+                purchaseDate,
                 rating,
                 playtimeHours,
                 note
@@ -192,11 +214,13 @@ public final class GameCsv {
         return game;
     }
 
+    // 把一堆 Game 对象转换为 CSV 文本
     public static String toCsvText(List<Game> games) {
         StringBuilder sb = new StringBuilder();
 
         sb.append(Csv.BOM);
 
+        // 添加表头行
         sb.append(Csv.formatRecord(HEADER)).append('\n');
         for (Game g: games) {
             sb.append(Csv.formatRecord(toFields(g))).append('\n');
@@ -204,6 +228,7 @@ public final class GameCsv {
         return sb.toString();
     }
 
+    // toCsvText() 的逆操作，把 CSV 文本解析为 Game 对象列表
     public static List<Game> parseCsvText(String text) {
 
         String normalized = Csv.stripBom(text);
