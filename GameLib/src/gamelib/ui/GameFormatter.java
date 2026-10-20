@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.ArrayList;
 
 public class GameFormatter {
+    // 工具类，不用实例化
     private GameFormatter() {}
 
     public static int width(String s) {
@@ -75,11 +76,12 @@ public class GameFormatter {
         return g.getTitle() + " | " + g.getPlatform();
     }
 
+    // 用于判断一个字符在等宽终端里占 1 列还是 2 列
     private static boolean isWide(char c) {
-        return (c >= 0x3000 && c <= 0x303F)
-            || (c >= 0x4E00 && c <= 0x9FFF)
-            || (c >= 0xFF00 && c <= 0xFF60)
-            || (c >= 0xFFE0 && c <= 0xFFE6);
+        return (c >= 0x3000 && c <= 0x303F)     // CJK标点
+            || (c >= 0x4E00 && c <= 0x9FFF)     // 汉字
+            || (c >= 0xFF00 && c <= 0xFF60)     // 全角 ascii
+            || (c >= 0xFFE0 && c <= 0xFFE6);    // 全角符号
     }
 
     private static String price(Game g) {

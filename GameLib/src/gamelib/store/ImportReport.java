@@ -3,10 +3,10 @@ package gamelib.store;
 import java.util.List;
 
 // record 用于声明不可变的数据载体
-// 比如这里写了 int added，编译器会自动生成一个 final 字段、一个构造器、一个 getter 方法（名字和字段一样）
+// 比如这里写了 int added，编译器会自动生成一个 private final 字段、一个全参构造器、一个 getter 方法（名字和字段一样）
 // 还会自动生成 equals()、hashCode()、toString() 方法
-//
-// 可以自行派生别的方法（比如这里的 total() 方法），但不能派生别的字段（比如 private int total; 是不允许的）
+// 可以自行派生别的方法（比如这里的 total() 方法），但不能派生别的非 static 字段（比如 private int total; 是不允许的）
+// 不能继承其他类，不能被继承
 
 // ImportReport 记录了导入游戏的结果，包括成功导入的数量、重复的数量、跳过的数量，以及重复游戏的标题列表
 // 便于 UI 显示导入结果
