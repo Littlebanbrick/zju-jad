@@ -2,7 +2,10 @@ package gamelib.io;
 
 import gamelib.io.LoadReport.Source;
 import gamelib.model.Game;
+import gamelib.xor.Xor;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -97,9 +100,14 @@ public final class LibraryFiles {
             }
 
             Path tmp = binaryPath.resolveSibling(binaryPath.getFileName() + ".tmp");
-            try (ObjectOutputStream out = new ObjectOutputStream(Files.newOutputStream(tmp))) {
+
+            // 先在内存里完整序列化，再整体 XOR，最后一次性写盘。
+            // 不能边序列化边加密
+            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+            try (ObjectOutputStream out = new ObjectOutputStream(buffer)) {
                 out.writeObject(new ArrayList<>(games));
             }
+            Files.write(tmp, Xor.xor(buffer.toByteArray()));
 
             Files.move(tmp, binaryPath, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
@@ -130,7 +138,17 @@ public final class LibraryFiles {
     }
 
     private List<Game> readBinary() {
-        try (ObjectInputStream in = new ObjectInputStream(Files.newInputStream(binaryPath))) {
+        // 先整体读字节并解密，再从内存反序列化 —— 和 saveBinary 的顺序严格对称。
+        // 若密钥不一致或文件是加密前的旧版本，解出来的字节无法反序列化，
+        byte[] decrypted;
+        try {
+            decrypted = Xor.xor(Files.readAllBytes(binaryPath));
+        } catch (IOException e) {
+            throw new UncheckedIOException("读取二进制存档失败：" + binaryPath, e);
+        }
+
+        try (ObjectInputStream in =
+                     new ObjectInputStream(new ByteArrayInputStream(decrypted))) {
             Object raw = in.readObject();
             if (!(raw instanceof List<?> list)) {
                 throw corrupt("存档内容不是列表，实际是 "

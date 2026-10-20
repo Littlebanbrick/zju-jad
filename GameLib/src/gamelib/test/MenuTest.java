@@ -295,6 +295,19 @@ public final class MenuTest {
         t.check(back.gameCount() == 2, "★ 读回 2 条");
         t.check(back.source() == LoadReport.Source.BINARY, "来源是 BINARY");
 
+        // ★ XOR 混淆（§5）：落盘的 game_lib.dat 不应是明文序列化流
+        try {
+            byte[] onDisk = Files.readAllBytes(bin.files.binaryPath());
+            t.check(onDisk.length > 0, "存档非空");
+            t.check((onDisk[0] & 0xFF) != 0xAC,
+                    "★ 落盘后不再是明文序列化流（首字节不是 0xAC）");
+            String asText = new String(onDisk, StandardCharsets.ISO_8859_1);
+            t.check(!asText.contains("purchasePrice") && !asText.contains("Elden Ring"),
+                    "★ 落盘后 strings 搜不到字段名和数据");
+        } catch (IOException e) {
+            t.check(false, "读存档字节失败：" + e);
+        }
+
         Fixture csv = fixture(library(game("Hades", Platform.STEAM, 70.0, 9)), "7\n2\n");
         csv.run();
         t.check(Files.exists(csv.files.csvPath()), "★ 生成了 game_lib.csv");
