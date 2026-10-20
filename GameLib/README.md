@@ -5,6 +5,8 @@
 完全离线运行：不使用任何第三方库，不联网，不依赖 Steam API，数据只保存在本地文件。
 所有 CSV 解析、二进制存档、对齐表格都由 JDK 自带 API 手写实现。
 
+已实现的 §5 可选扩展项：**存档 XOR 混淆**、**隐藏而非物理删除**（§4.4 扩展）。
+
 ---
 
 ## 1. 运行要求
@@ -64,9 +66,17 @@ java -cp out gamelib.test.SelfTest
 
 | 文件 | 格式 | 说明 |
 |---|---|---|
-| `game_lib.dat` | Java 序列化（二进制） | 启动时**优先**加载，最快 |
+| `game_lib.dat` | Java 序列化 + XOR 混淆 | 启动时**优先**加载，最快 |
 | `game_lib_backup.dat` | 同上 | 每次保存二进制前自动备份旧的 `game_lib.dat` |
 | `game_lib.csv` | UTF-8 文本（带 BOM） | 二进制缺失或损坏时的回退路径，也可用 Excel 直接打开 |
+
+**`game_lib.dat` 经过 XOR 混淆**（§5 可选扩展）：落盘后 `strings game_lib.dat`
+读不到 `purchasePrice`、`Elden Ring` 这类字段名和数据，`xxd` 也看不到 Java 序列化的
+`AC ED` 魔数。
+
+**这不是密码学意义上的加密**：密钥硬编码在 `gamelib/xor/Xor.java` 里，反编译即可看到；
+且 Java 序列化流的固定魔数 `AC ED 00 05` 使已知明文攻击可以立即反推密钥。
+它只提供「别人拿文本工具随手一瞥看不出内容」这一层符号性保护。
 
 **启动顺序**（§4.6）：`game_lib.dat` → `game_lib.csv` → 都没有则提示"新建游戏库"。
 
@@ -81,12 +91,16 @@ java -cp out gamelib.test.SelfTest
 
 ```text
 1. 若 game_lib.dat 已存在 -> 复制为 game_lib_backup.dat
-2. 写入 game_lib.dat.tmp
-3. 原子替换 game_lib.dat
+2. 在内存里序列化整个列表，再整体 XOR 混淆
+3. 写入 game_lib.dat.tmp
+4. 原子替换 game_lib.dat
 ```
 
 **不直接写 `game_lib.dat`**：写到一半被中断的话，存档和备份会一起损坏。
 `Files.move` 在同一文件系统上是原子操作。
+
+**必须先序列化到内存再 XOR**：`ObjectOutputStream` 的输出与流位置强相关，
+而 XOR 需要完整的字节数组，所以两者不能交织。读取方向严格对称：整体读字节 → XOR → 从内存反序列化。
 
 保存时使用 `GameLibrary.allIncludingHidden()` 而非 `all()` ——
 用 `all()` 会让**隐藏的游戏从磁盘上永久消失**。
@@ -116,10 +130,12 @@ src/gamelib/
 │   ├── Console.java             输入原语 + 校验重试（流可注入）
 │   ├── GameFormatter.java       对齐表格（含中英文宽度修正）
 │   └── Stats.java               统计报表（record）
+├── xor/
+│   └── Xor.java                 §5 扩展：存档字节的 XOR 混淆
 └── test/                        测试套件
 ```
 
-依赖方向是单向的：`ui → store → model`，`io` 依赖 `model`。
+依赖方向是单向的：`ui → store → model`，`io` 依赖 `model` 与 `xor`。
 `model` 不依赖任何其他包。
 
 ---
@@ -132,6 +148,8 @@ src/gamelib/
 | 宽度对齐只覆盖中英 + ASCII | 日文/韩文游戏名的表格会歪 |
 | 价格用 `double` | 显示时用 `%.2f` 格式化，统计求和可能有浮点尾差 |
 | 读取二进制存档时不重新校验 | 等价于信任 `game_lib.dat`；CSV 路径会完整走一遍构造器校验 |
+| **加密前的旧 `game_lib.dat` 读不出来** | 引入 XOR 后，未加密的旧存档会被判为「损坏」而回退到 `game_lib.csv`；**若没有 CSV，程序会拒绝启动**（避免以空库覆盖）。处理办法：先用旧版本导出 CSV，或手工删除该 `.dat` |
+| XOR 密钥硬编码 | 不是真正的加密，反编译可见；`AC ED` 魔数使已知明文攻击可反推密钥 |
 
 ---
 
