@@ -4,6 +4,8 @@ out/
 
 # 打包产物
 *.jar
+GameLib.zip
+GameLib-report.pdf
 
 # 运行时数据（用户库存，不进版本库）
 game_lib.dat
@@ -11,4 +13,8 @@ game_lib_backup.dat
 game_lib.csv
 data/
 
-GameLib.zip
+# 本地工具链（typst 静态二进制，约 17 MB，可随时重新下载）
+.tools/
+
+# 模板原文备份（内容已并入 GameLib-report.typ）
+*.typ.bak
