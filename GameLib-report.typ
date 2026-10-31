@@ -106,17 +106,11 @@
   ]
   #image("icon_ZJU.png", width: 30%)
   #v(1.6em)
-  #text(size: 20pt)[作者：姓名 学号]
+  #text(size: 20pt)[作者：王传宇 3250102681]
   #v(0.5em)
-  #text(size: 20pt)[指导教师：姓名]
+  #text(size: 20pt)[指导教师：翁恺]
   #v(0.5em)
-  #text(size: 20pt)[时间：YYYY-MM-DD]
-  #v(1.6em)
-  #text(size: 11pt, fill: gray.darken(35%))[
-    Java Application Design　｜　JDK 17+　｜　game-lib.jar
-    \
-    30 个 .java / 4640 行　｜　673 项测试断言　｜　零第三方依赖
-  ]
+  #text(size: 20pt)[时间：2026-10-31]
 ]
 
 #pagebreak()
@@ -180,7 +174,7 @@ src/gamelib/
 ├── io/             581 行    Csv、GameCsv、LibraryFiles、LoadReport
 ├── xor/             21 行    Xor 存档混淆（§5 扩展）
 ├── ui/             780 行    Menu、Console、GameFormatter、Stats
-└── test/          2633 行    673 项断言的测试套件
+└── test/          2633 行    测试套件
 ```
 
 依赖方向是单向的：
@@ -195,8 +189,8 @@ ui  ──>  store  ──>  model
 
 model 不依赖任何包，因此它是唯一可以被独立测试和独立理解的层。
 io 与 store 互不依赖：io 只把「文件 ↔ 字符串 ↔ `List<Game>`」转换好，
-把「这些游戏怎么放进索引、重复怎么办」交给 store。
-xor 是最底层的一个纯字节变换，只有 io 依赖它，ui 完全不知道它的存在。
+「这些游戏怎么放进索引、重复怎么办」则是 store 的任务。
+xor 则是最底层的一个纯字节变换。
 
 == 2.2 为什么这样分层
 
@@ -223,11 +217,11 @@ xor 是最底层的一个纯字节变换，只有 io 依赖它，ui 完全不知
 )
 
 Console 的注入是整个项目里性价比最高的一处设计：它让 7 个菜单分支、输入校验重试、
-确认提示、持久化全部可以用一段脚本文本驱动（MenuTest 就是这么做的，118 个断言全部端到端）。
+确认提示、持久化全部可以用一段脚本文本驱动（MenuTest 就是这么做的）。
 
 = 三、核心设计决策
 
-这一节是报告的主体。每一条的结构是：问题 → 选择 → 理由 → 代价。
+每一条核心设计决策的结构是：问题 → 选择 → 理由 → 代价。
 
 == 3.1 通关状态：只存一个可空日期，不存布尔标志
 
@@ -237,24 +231,21 @@ Console 的注入是整个项目里性价比最高的一处设计：它让 7 个
 *选择*：字段只保留 `private LocalDate completedDate`，null 即未通关；
 `isCompleted()` 是派生方法 `return completedDate != null;`。
 
-*理由*：这样不可能出现「已完成但无日期」这种矛盾态。否则年度统计会「正确地从数据里
-算出一个错误的结果」，而且不报错——这是最难发现的一类缺陷。
+*理由*：这样不可能出现「已完成但无日期」这种矛盾态。
 
-*代价*：CSV 里 completed 这一列成了派生列（写出来给人和 Excel 看），导入时必须忽略它，
-只认 completed_date。这个约定写在 GameCsv 的注释里，并有测试固定
+*代价*：CSV 里 completed 这一列成了派生列（写出来给人和 Excel 看），导入时必须忽略它。这个约定写在 GameCsv 的注释里，并有测试固定
 （「completed 列说 y 但日期为空 → 仍视为未通关」）。构造器不能收 completedDate，
-读档只能「先构造、再补盖章」。
+读档只能先构造 Game 对象、再 `markCompleted()` 。
 
 == 3.2 唯一键：规范化标题 + 平台
 
 *问题*：`Map<String, Game>` 若只用标题作键，GOG 版《巫师3》和 Steam 版会互相覆盖。
 
-*选择*：`Game.key()` 返回「规范化标题 + 平台名」。查重、equals、hashCode、CSV 索引
-全部经由这一个方法。
+*选择*：`Game.key()` 返回「规范化标题 + 平台名」。查重、equals、hashCode、CSV 索引全部经由这一个方法。
 
 *理由*：§2 明确存在「同一款游戏在两个平台各买一次」的场景。同时标题要小写化，
 因为 §2 的模糊搜索本身就大小写不敏感（输入 witch 命中 The Witcher 3），
-那么「重复入库」的判断也必须同样宽松，否则 Elden Ring 和 elden ring 会被当成两款游戏。
+那么重复入库的判断也必须同样宽松。
 
 *代价*：title 与 platform 必须是 final（见 3.3）。
 
@@ -264,22 +255,18 @@ Console 的注入是整个项目里性价比最高的一处设计：它让 7 个
 
 *选择*：equals 与 hashCode 都委托给 `key()`。
 
-*理由*：若比较全部字段，会出现一个极隐蔽的缺陷——调用过 `addPlaytime(5)` 之后，
-同一个游戏在 HashSet 里就找不到了（对象被放进了「旧哈希」对应的桶，
-而查找用的是「新哈希」）。表现为 remove 删不掉、size() 不减少。
+*理由*：若比较全部字段会出现缺陷——调用过 `addPlaytime(5)` 之后，
+同一个游戏在 HashSet 里就找不到了。表现为 remove 删不掉、size() 不减少。
 
-*代价*：title、platform 必须 final，否则对象会在哈希容器里永久失联。
-好在本项目的更新操作（时长、通关、评分、笔记）从不改这两个字段，因此这个约束天然成立。
+*代价*：title、platform 必须 final，否则对象会在哈希容器里失联。本项目的更新操作从不改这两个字段，因此这个约束天然成立。
 
 == 3.4 Optional 只能作返回值，不能作字段
 
-*问题*：completedDate 是「可能没有值」的，看起来最自然的写法是 `Optional<LocalDate>`。
+*问题*：completedDate 是「可能没有值」的。
 
-*选择*：字段用裸 LocalDate + null 表示缺失；Optional 只出现在方法返回值上
-（`GameLibrary.find`、`Stats.mostExpensivePlatform`）。
+*选择*：字段用裸 LocalDate + null 表示缺失。
 
-*理由*：Optional 没有实现 Serializable。写成字段，game_lib.dat 直接写不出去，
-抛 NotSerializableException: java.util.Optional。这是一个必须实际动手才会发现的约束。
+*理由*：Optional 没有实现 Serializable。
 
 *代价*：可空字段的类型上看不出来，只能在字段声明处写明「null = 未通关」。
 
@@ -287,15 +274,13 @@ Console 的注入是整个项目里性价比最高的一处设计：它让 7 个
 
 *问题*：既要显示成 Steam，又要保存成永不变化的值。
 
-*选择*：常量名给机器，构造参数给显示。`name()` 返回全大写常量名（final，无法覆盖），
+*选择*：常量名给机器，构造参数给显示。`name()` 返回final的全大写常量名，
 `toString()` 被覆盖为返回 label。
 
-*理由*：label 是可变的显示名。若把 label 写进存档，日后改一个显示名
-（Xbox → Xbox Game Pass）就会让昨天导出的所有文件读不回来。name() 事实上是冻结的。
+*理由*：label 是可变的显示名。若显示名发生更改（Xbox → Xbox Game Pass），旧存档可能无法读回，所以我们只能用冻结的 `name()`。
 
 *代价*：覆盖 toString() 不影响 valueOf——这两个方法不互逆。因此必须自己写
-`Platform.fromString`，同时匹配 name() 和 label（于是全大写、首字母大写、全小写、
-带首尾空格的输入全部接受）。
+`Platform.fromString`，同时匹配 name() 和 label。
 
 == 3.6 CSV 不只是导出格式，还是存档的回退路径
 
@@ -303,50 +288,41 @@ Console 的注入是整个项目里性价比最高的一处设计：它让 7 个
 
 *选择*：按存档对待。平台列写 name()，而不是 label。
 
-*理由*：§4.6 明确要求「先尝试 game_lib.dat，若不存在则尝试 game_lib.csv」。
-既然 CSV 会被读回来当数据用，它就必须长期稳定。这直接决定了 3.5 中的选择，
-也决定了 CSV 必须带 BOM、必须能 round-trip。
+*理由*：§4.6 明确要求「先尝试 game_lib.dat，若不存在则尝试 game_lib.csv」。既然 CSV 会被读回来当数据用，它就必须长期稳定。
 
-*代价*：CSV 的列定义成了对外契约，表格里多一列、少一列都要同步改读写两侧。
+*代价*：CSV 的列定义成了对外契约，表格结构改变需要同步改读写两侧。
 
 == 3.7 派生结构不持久化
 
 *问题*：GameLibrary 内部是 `Map<String, Game>`，键是从 Game 算出来的派生值。
 
 *选择*：GameLibrary 不实现 Serializable。存档里只写 `List<Game>`，
-索引在加载时用 addAll 重建。
+索引在加载时重建。
 
-*理由*：若把 Map 一起序列化，会有三个问题：
+*理由*：若把 Map 一起序列化会有两个问题：
 
 + 同一份信息存两遍（键能从 Game 算出来）；
-+ 日后修改 key() 的算法，旧存档里的键就和新算法对不上，查询会静默失效；
-+ GameLibrary 没有 serialVersionUID，加一个 public 方法就会改变自动算出的 UID，导致废档。
++ GameLibrary 没有 serialVersionUID，日后功能拓展可能会改变 UID。
 
-*代价*：每次启动都要重建索引。对几百款游戏的规模而言可以忽略。
+*代价*：每次启动都要重建索引。
 
 == 3.8 序列化不调用构造器：两条加载路径的校验强度不同
 
-*问题*：Game 的构造器有 7 处校验（标题非空、价格非负、日期非未来、评分 0–10 等）。
-这些校验在反序列化时不会执行：ObjectInputStream 直接往字段里写字节，跳过整个构造器。
+*问题*：Game 的构造器有 7 处校验，但反序列化不执行——ObjectInputStream 直接往字段写字节。
 
-*选择*：接受这个差异，但在 `LibraryFiles.readBinary` 里做类型检查（用 instanceof
-逐元素确认是 Game 而不是别的类），并在文档里明确说明。
+*选择*：仅在 `LibraryFiles.readBinary` 里用 instanceof 逐元素确认类型。
 
-*理由*：文件是程序自己写的，风险很低；而修复方式（读档后重新校验一遍）会让二进制路径
-失去「快」的意义。
+*理由*：文件由程序自己写，出错风险很低，读档后没必要重新校验。
 
-*代价*：game_lib.dat 里的数据严格来说比 game_lib.csv 里的数据受到的校验更少。
-这也正是必须保留 CSV 兜底路径的技术理由之一：CSV 读入会走 GameCsv.fromFields →
-new Game(...)，完整跑一遍构造器校验。
+*代价*：game_lib.dat 的校验强度低于 game_lib.csv。
 
-== 3.9 加载失败绝不静默降级
+== 3.9 加载失败不静默降级
 
-*问题*：game_lib.dat 存在但读不出来时，返回空库最省事。
+*问题*：game_lib.dat 读不出来时是否应该返回空库。
 
 *选择*：抛异常，拒绝启动。
 
-*理由*：返回空库会让用户以为数据丢了；更糟的是，一旦用户在空库上操作并保存，
-旧存档就被空库覆盖了。宁可启动失败也不能静默降级。
+*理由*：空库会让用户以为数据丢了，一旦选择保存旧档就会被覆盖。
 
 具体策略（`LibraryFiles.load`）：
 
@@ -354,15 +330,14 @@ new Game(...)，完整跑一遍构造器校验。
   columns: (2.4fr, 3.6fr),
   table.header([情况], [行为]),
   [game_lib.dat 读成功], [用二进制，来源记为 BINARY],
-  [game_lib.dat 坏，game_lib.csv 好], [降级到 CSV，并把原因写进 warnings],
+  [game_lib.dat 坏，game_lib.csv 好], [降级到 CSV，原因写进 warnings],
   [两个都坏], [抛异常，拒绝以空库启动],
-  [两个都不存在], [返回空库，来源记为 EMPTY（§4.6 的「新建游戏库」）],
-  [game_lib.dat 坏，CSV 不存在], [抛异常（不能因为「另一个文件不存在」就当没数据）],
+  [两个都不存在], [返回空库，来源记为 EMPTY],
 )
 
-== 3.10 保存前备份、写入用原子替换
+== 3.10 保存前备份、原子替换
 
-*问题*：直接写 game_lib.dat，若写到一半被中断，存档损坏。
+*问题*：直接写 game_lib.dat，中断时存档损坏。
 
 *选择*：
 
@@ -372,53 +347,32 @@ new Game(...)，完整跑一遍构造器校验。
 3. Files.move(tmp, game_lib.dat, REPLACE_EXISTING)   // 原子替换
 ```
 
-*理由*：如果「先清空原文件再往里写」，那么崩溃时存档和备份会一起废掉。
-Files.move 在同一文件系统上是原子操作，因此任何时刻磁盘上都至少有一份完整存档。
+*理由*：Files.move 在同一文件系统上是原子操作，任何时刻磁盘上至少有一份完整存档。
 
-*代价*：多一次磁盘写入。对一个几百款游戏的库来说完全无所谓。
-
-另一处相关选择：保存时必须用 `GameLibrary.allIncludingHidden()` 而不是 all()。
-后者会过滤隐藏项，用它保存等于让隐藏的游戏从磁盘上永久消失。MenuTest 里有一条
-针对性断言（「隐藏的游戏也存进了磁盘（2 条，不是 1 条）」）。
+*代价*：多一次磁盘写入。
 
 = 四、§3 六个技术点的实现
 
-#table(
-  columns: (1.2fr, 3.4fr, 2.4fr),
-  table.header([技术点], [在系统中的体现], [主要位置]),
-  [*文本文件 I/O*],
-  [导出 game_lib.csv，UTF-8 带 BOM，可直接用 Excel 打开；也可作为存档回退加载],
-  [`io/LibraryFiles.java`、`io/GameCsv.java`],
-  [*二进制文件 I/O*],
-  [读写 game_lib.dat，写入采用「备份 + 临时文件 + 原子替换」],
-  [`LibraryFiles.saveBinary`],
-  [*对象串行化*],
-  [Game implements Serializable + 显式 serialVersionUID = 1L，
-   一行 `writeObject(List<Game>)` 保存整个库],
-  [`model/Game.java`],
-  [*异常处理*],
-  [34 处 InvalidGameDataException 抛出点、20 处捕获；CSV 导入的每个错误都带行号与列名；
-   UI 层统一三层 catch],
-  [`model/InvalidGameDataException.java` 等],
-  [*Optional*],
-  [`GameLibrary.find` 返回 `Optional<Game>`（永不返回 null）；
-   `Stats.mostExpensivePlatform` 在空库时返回 `Optional.empty()`],
-  [`store/GameLibrary.java`、`ui/Stats.java`],
-  [*Collections / Map*],
-  [`Map<String, Game>` 做标题+平台索引；`List<Game>` 做查询结果；
-   `Map<Platform, List<Game>>` 按平台分组；`Map<Integer, Integer>` 做年度统计],
-  [`store/GameLibrary.java`、`ui/Stats.java`],
-)
++ *文本文件 I/O*：导出 game_lib.csv（UTF-8 带 BOM，Excel 可直接打开），也可作为存档回退加载。
+  `io/LibraryFiles.java`、`io/GameCsv.java`
++ *二进制文件 I/O*：读写 game_lib.dat，写入采用备份 + 临时文件 + 原子替换。
+  `LibraryFiles.saveBinary`
++ *对象串行化*：`Game implements Serializable` + 显式 `serialVersionUID = 1L`，
+  一行 `writeObject(List<Game>)` 保存整个库。`model/Game.java`
++ *异常处理*：34 处抛出点、20 处捕获；CSV 导入的每个错误带行号与列名；UI 层统一三层 catch。
+  `model/InvalidGameDataException.java`
++ *Optional*：`find` 返回 `Optional<Game>`，永不返回 null；空库时 `mostExpensivePlatform` 返回 empty。
+  `store/GameLibrary.java`、`ui/Stats.java`
++ *Collections / Map*：`Map<String, Game>` 做索引，`List<Game>` 做结果，
+  `Map<Platform, List<Game>>` 做分组，`Map<Integer, Integer>` 做年度统计。
+  `store/GameLibrary.java`、`ui/Stats.java`
 
-== 4.1 关于 Optional 的两个易错点
+== 4.1 Optional 的两个易错点
 
-+ *Optional 一旦作为返回类型，就绝不能返回 null。* 否则调用方最自然的链式写法
-  （find 之后直接 map）会抛 NullPointerException，而栈指向调用点、不指向 GameLibrary。
-  GameLibraryTest 里有专门断言：「未命中时返回的是 Optional 对象，而不是 null」。
-+ *不要用它包集合。* searchByTitle 返回 `List<Game>`（可能为空但永不为 null），
-  因为「空的 List」已经能表达「什么都没找到」，`Optional<List<Game>>` 是多余的一层。
++ 作为返回类型时绝不能返回 null：否则调用方的链式写法会抛 NPE，而栈指向调用点。GameLibraryTest 有断言。
++ 不用它包集合：空 List 已能表达「没找到」，`Optional` 多余了。
 
-== 4.2 关于 Collections 的三处顺序考量
+== 4.2 Collections 的顺序考量
 
 #table(
   columns: (2.2fr, 1.3fr, 3.3fr),
@@ -427,21 +381,16 @@ Files.move 在同一文件系统上是原子操作，因此任何时刻磁盘上
   [保持入库顺序，「查看全部」的输出才稳定可复现],
   [`Stats.completedByYear`], [`TreeMap`], [年份按数值升序输出],
   [`Stats.countByPlatform`], [`TreeMap`],
-  [enum 的 compareTo 按 ordinal，因此迭代顺序就是声明顺序，柱状图的排列才固定],
+  [enum 的 compareTo 按 ordinal，迭代顺序即声明顺序，柱状图排列固定],
 )
 
-HashMap 在本项目中只用于「顺序不会被观察到」的场合。这一点有实际教训：
-`HashMap<Integer, Integer>` 装 2022/2023/2024 时恰好按升序迭代，但换成
-2000/1990/2024/2015 就乱了——因为桶下标是 hash & 15，小整数恰好撞对顺序。
-「看着对」不等于「有保证」。
+HashMap 只用于顺序不会被观察到的地方。
 
 = 五、§4 七个功能模块与 §5 可选扩展
 
-以下输出均为实际运行结果（java -jar game-lib.jar）。
+以下输出均为实际运行结果。
 
 == 5.1 游戏入库（§4.1）
-
-逐字段录入，每个字段独立校验并允许重试；任一必填字段留空即取消本次操作并回到主菜单。
 
 ```text
 => 添加游戏
@@ -460,8 +409,7 @@ HashMap 在本项目中只用于「顺序不会被观察到」的场合。这一
 【提示】已成功入库：Elden Ring | Steam
 ```
 
-*校验规则*：价格 ≥ 0（0 合法——Epic 白嫖是题目场景之一）、购买日期 ≤ 今天、
-评分 0–10（闭区间两端都合法）、时长 ≥ 0、标题/类型/平台非空。
+*校验规则*：价格 ≥ 0（0 合法）、购买日期 ≤ 今天、评分 0–10（两端合法）、时长 ≥ 0、标题/类型/平台非空。任一必填字段留空即取消本次操作。
 
 *重复入库*：
 
@@ -469,8 +417,7 @@ HashMap 在本项目中只用于「顺序不会被观察到」的场合。这一
 【警告】该游戏已存在！请勿重复入库。 Elden Ring | Steam
 ```
 
-*批量导入（§4.1）*：读任意路径的 CSV，逐行解析后交给 GameLibrary.addAll，
-重复的跳过并计数，最后给出回执：
+*批量导入*：读任意路径的 CSV，交给 `GameLibrary.addAll`，重复项跳过并计数。
 
 ```text
 CSV 文件路径: /path/to/incoming.csv
@@ -481,7 +428,7 @@ CSV 文件路径: /path/to/incoming.csv
 
 == 5.2 游戏查询（§2 / §4.2）
 
-五种筛选条件（标题模糊、平台、类型、通关状态、价格区间），以及可任意组合的复合条件。
+五种筛选条件（标题模糊、平台、类型、通关状态、价格区间），以及任意组合的复合条件。
 
 ```text
 => 查看全部
@@ -491,11 +438,9 @@ CSV 文件路径: /path/to/incoming.csv
 3. 巫师3      | GOG   | ¥99  | 60h  | 评分 9  | 未通关 | 剧情神作
 ```
 
-*注意第 3 行的对齐*：巫师3 只有 3 个字符，但占 5 个终端列。若用 String.length()
-补齐，这三行会左右参差。实现里用自写的 GameFormatter.width() 按显示列宽补齐
-（汉字与全角符号算 2 列）。
+*对齐*：巫师3 是 3 个字符但占 5 列，用 String.length() 补齐会参差。`GameFormatter.width()` 按显示列宽补齐（汉字与全角符号算 2 列）。
 
-复合查询不需要新增方法，直接用谓词组合：
+复合查询用谓词组合，不需要新方法：
 
 ```java
 lib.filter(g -> g.getPlatform() == Platform.STEAM && !g.isCompleted());
@@ -503,7 +448,7 @@ lib.filter(g -> g.getPlatform() == Platform.STEAM && !g.isCompleted());
 
 == 5.3 游戏更新（§4.3）
 
-四项操作各有独立入口，互不干扰：
+四项操作各有独立入口：
 
 ```text
 => 更新游戏
@@ -517,15 +462,11 @@ lib.filter(g -> g.getPlatform() == Platform.STEAM && !g.isCompleted());
 【提示】已标记通关，日期 2024-03-15
 ```
 
-*「通关日期」可补录历史日期*，这不是装饰：程序是新写的，若不支持补录，
-「2024 年通关了哪些游戏」这个统计永远只会显示今年。
-
-更新不需要额外的「写回」操作——find 拿到的就是 LinkedHashMap 里那个对象，
-修改它即修改库。这一点在 Game 的键字段是 final 的前提下是安全的。
+注意：通关日期可补录；更新不需要写回：find 返回的就是 LinkedHashMap 里的那个对象。
 
 == 5.4 游戏删除（§4.4）
 
-提供两种方式：永久删除（需确认）与隐藏（可恢复）。
+永久删除需确认，隐藏可恢复。
 
 ```text
 => 删除游戏
@@ -536,11 +477,9 @@ lib.filter(g -> g.getPlatform() == Platform.STEAM && !g.isCompleted());
 确认永久删除 GTA5 | Epic ? [y/N]
 ```
 
-确认提示里直接回车等于放弃——危险操作默认走安全分支，且任何非肯定输入
-（包括输入流结束）都返回 false。
+此处任何非肯定输入都返回 false。
 
-隐藏的游戏不出现在「查看全部」、搜索、统计和分组结果里，但仍能被 find 找到
-（否则无法取消隐藏），也仍能被永久删除。全部游戏都被隐藏时会给出专门提示，而不是空刷屏。
+隐藏项不出现在查看全部、搜索、统计和分组里，但仍能被 find 找到（否则无法取消隐藏）和删除。全部隐藏时给出提示。
 
 == 5.5 数据统计（§4.5）
 
@@ -561,14 +500,11 @@ lib.filter(g -> g.getPlatform() == Platform.STEAM && !g.isCompleted());
 -----------------------------------------
 ```
 
-三处实现细节：
+三处细节：
 
-+ *空库时平均评分返回 0.0 而不是 NaN*。0 / 0 在 Java 里是 NaN，
-  而 String.format("%.1f", NaN) 会打印出 NaN。
-+ *标签列用显示宽度补齐*。「总游戏数」是 4 个汉字（8 列），「最烧钱的平台」是
-  6 个汉字（12 列），用 String.format("%-16s") 会错位。
-+ *柱状图格数按比例缩放，且至少 1 格*。`12 * 1 / 100` 若按整数除法是 0 格，
-  看起来像「该平台没有游戏」。
++ *空库平均评分返回 0.0*
++ *标签列用显示宽度补齐*：「总游戏数」8 列、「最烧钱的平台」12 列，`%-16s` 会错位。
++ *柱状图至少 1 格*：`12 * 1 / 100` 按整数除法是 0 格。
 
 == 5.6 数据持久化（§4.6）
 
@@ -581,7 +517,7 @@ lib.filter(g -> g.getPlatform() == Platform.STEAM && !g.isCompleted());
 ===================================================
 ```
 
-退出时选择格式：
+退出时：
 
 ```text
 => 保存并退出
@@ -592,27 +528,25 @@ lib.filter(g -> g.getPlatform() == Platform.STEAM && !g.isCompleted());
 正在写出 -> game_lib.dat ...  完成！
 ```
 
-导出的 CSV 前三个字节是 EF BB BF（UTF-8 BOM），因此 Windows 版 Excel 双击打开时
-中文不乱码：
+CSV 前三个字节是 EF BB BF（BOM），Windows Excel 打开不乱码：
 
 ```text
-title,platform,genre,purchase_price,purchase_date,completed,completed_date,playtime_hours,rating,note,hidden
+title,platform,genre,purchase_price,purchase_date,completed,completed_date,
+playtime_hours,rating,note,hidden
 Elden Ring,STEAM,ARPG,298.0,2022-03-01,y,2026-10-20,120.0,10,神作，DLC快出！,false
 GTA5,EPIC,Action,0.0,2020-05-14,n,,25.0,8,Epic白嫖,false
 巫师3,GOG,RPG,99.0,2018-06-01,n,,60.0,9,剧情神作,false
 ```
 
-CSV 共 11 列。第 6 列 completed 是给人看的派生列，第 7 列 completed_date
-才是真实来源（见 3.1）。
-
+共 11 列（表头在此折行显示）。
 == 5.7 用户界面（§7）
 
 + 文本菜单 + 数字选择
-+ 输入校验（价格 ≥ 0、日期 ≤ 今天、评分 0–10），非法输入重问该字段而不是退出程序
-+ 快速命令：add / search <关键词> / stats / exit
++ 非法输入重问该字段，不退出程序
++ 快速命令 add / search <关键词> / stats / exit
 + Ctrl-D 退出
 
-== 5.8 §5 可选扩展（加分项）
+== 5.8 §5 可选扩展
 
 === 5.8.1 完成情况
 
@@ -622,36 +556,23 @@ CSV 共 11 列。第 6 列 completed 是给人看的派生列，第 7 列 comple
   [1], [愿望单（Wishlist，单独存储）], [未实现],
   [2], [游戏封面路径（本地图片，可选填）], [未实现],
   [3], [批量导入 Steam 购买记录],
-  [*部分*：通用 CSV 导入已实现，Steam 原始格式的列名适配未做],
+  [*部分*：实现了通用 CSV 导入],
   [4], [游玩倒计时（想在今年通关）], [未实现],
   [5], [数据加密（简单 XOR）], [*已实现*],
   [—], [（§4.4 的扩展）隐藏而非物理删除], [*已实现*],
 )
 
-两个已实现的扩展都是「不改变已有数据结构」就能完成的——这是有意的选择：
-§5 是加分项，为目标投入的时间应当换来可演示的效果，
-而不是连带改写二十余处测试夹具。
+已实现的两项都不改动已有数据结构。
 
-=== 5.8.2 XOR 混淆的原理
+=== 5.8.2 XOR 原理
 
-异或运算的定义是「两个位不同则为 1」：
+异或：两个位不同则为 1。
 
-#table(
-  columns: (auto, auto, auto),
-  align: center + horizon,
-  table.header([a], [b], [a xor b]),
-  [0], [0], [0],
-  [0], [1], [1],
-  [1], [0], [1],
-  [1], [1], [0],
-)
-
-由此可得两条性质：a xor 0 = a，以及 a xor a = 0。把密钥 k 作用两次：
+a xor 0 = a，a xor a = 0，故密钥 k 作用两次还原：
 
 $ (a op("xor") k) op("xor") k = a op("xor") (k op("xor") k) = a op("xor") 0 = a $
 
-*所以 XOR 是自逆的——加密和解密是同一个运算*，实现里只需要一个方法，
-不需要分别写 encrypt 与 decrypt：
+*XOR 自逆，加密与解密是同一运算*，只需一个方法：
 
 ```java
 public static byte[] xor(byte[] data) {
@@ -663,15 +584,13 @@ public static byte[] xor(byte[] data) {
 }
 ```
 
-XOR 是逐字节替换，因此长度与结构都不变，只是每个字节的值变了。
+逐字节替换，长度与结构不变。
 
-=== 5.8.3 接入方式：读写两侧严格对称
+=== 5.8.3 接入
 
-混淆只作用在 LibraryFiles.saveBinary 与 readBinary 两个方法上，
-其余逻辑（备份、原子替换、加载优先级、CSV 导出）一行未动。
+只改 `LibraryFiles` 的 saveBinary 与 readBinary 两个方法。
 
-*写入*：因为 ObjectOutputStream 的输出与流位置强相关，而 XOR 需要完整的字节数组，
-两者不能交织，所以先在内存里序列化完再统一混淆：
+*写入*：ObjectOutputStream 的输出与流位置相关，而 XOR 需要完整数组，故先序列化到内存：
 
 ```java
 ByteArrayOutputStream buffer = new ByteArrayOutputStream();
@@ -682,18 +601,18 @@ Files.write(tmp, Xor.xor(buffer.toByteArray()));
 Files.move(tmp, binaryPath, StandardCopyOption.REPLACE_EXISTING);
 ```
 
-*读取*严格对称：
+*读取*对称：
 
 ```java
 byte[] decrypted = Xor.xor(Files.readAllBytes(binaryPath));
 try (ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(decrypted))) {
-    // ... 原有反序列化逻辑完全不变
+    // ... 原有反序列化逻辑不变
 }
 ```
 
-=== 5.8.4 实际效果
+=== 5.8.4 效果
 
-未混淆的 game_lib.dat 里，字段名是明文字节，用 strings 可以直接读出：
+未混淆时 strings 可读出字段名：
 
 ```text
 hiddenD
@@ -706,8 +625,7 @@ purchaseDateq
 titleq
 ```
 
-混淆之后 strings game_lib.dat 一个都读不到；xxd 看到的也不是 Java 序列化的固定魔数
-AC ED 00 05：
+混淆后一个都读不到，魔数也不在：
 
 ```text
 明文: AC ED 00 05 73 72 00 13 ...
@@ -715,55 +633,39 @@ AC ED 00 05：
       （AC xor 13 = BF，ED xor 67 = 8A，00 xor 78 = 78，05 xor 91 = 94）
 ```
 
-而程序侧完全无感，仍能正常读回全部数据。
+程序侧无感。
 
-=== 5.8.5 强度：这是混淆，不是加密
+=== 5.8.5 强度：混淆而非加密
 
-报告必须如实说明这一点，否则等于夸大成果：
++ *密钥硬编码*：在 `gamelib/xor/Xor.java`，反编译可见。
++ *已知明文可反推密钥*：序列化流固定以 AC ED 00 05 开头。
 
-+ *密钥硬编码在源码里*（`gamelib/xor/Xor.java` 的 private static final byte[] KEY），
-  反编译即可看到。private static final 只能阻止运行期的意外修改——
-  写成 public static byte[] 会让任何一处密钥改写操作在所有存档上静默生效，
-  所以这个修饰符是必要的，但它不提供任何保密性。
-+ *已知明文攻击可以立刻反推密钥*。Java 序列化流的开头固定是 AC ED 00 05，
-  攻击者用「密文 xor 已知明文」就得到密钥前 4 个字节；字段名又都是 ASCII，
-  已知明文足够多，整个密钥都能反推出来。
-+ *密钥长度决定了强度*。密钥与明文等长、随机、且永不复用，才是理论上不可破的
-  「一次性密码本」；本项目用 4 字节循环复用的密钥，属于维吉尼亚密码，
-  可以靠频率分析或已知明文破解。
-+ *不隐藏长度*：文件大小仍然暴露「有多少款游戏」的量级。
-+ *不提供完整性校验*：改动任一字节会导致反序列化失败，但那只是副作用，
-  不是设计上的篡改检测。
+实际价值只有一条：strings 或十六进制编辑器随手一瞥看不出内容。
 
-它的实际价值只有一条：让别人拿 strings 或十六进制编辑器随手一瞥时，
-看不出你在玩什么、花了多少钱。这正是 §5 所说的「保护个人库存」的最朴素含义。
+=== 5.8.6 兼容性
 
-=== 5.8.6 引入 XOR 带来的兼容性问题
-
-加密前后的存档格式不兼容：旧的明文 game_lib.dat 现在会被判为「损坏」。
+加密前后的存档格式不兼容，旧的明文 game_lib.dat 会被判为损坏。
 
 #table(
   columns: (2.4fr, 3.6fr),
   table.header([情况], [行为]),
-  [旧明文 .dat + 有 game_lib.csv], [打印警告后回退到 CSV，数据不丢],
-  [旧明文 .dat + 无 .csv], [拒绝启动（3.9 的「绝不静默降级」在起作用）],
+  [旧明文 .dat + 有 game_lib.csv], [打印警告后回退 CSV，数据不丢],
+  [旧明文 .dat + 无 .csv], [拒绝启动],
 )
 
-第二种情况是刻意保留的行为——宁可启动失败，也不能以空库覆盖旧存档。
-这一条已写入 README 的「已知限制」。
+后一种是刻意的：宁可启动失败，也不以空库覆盖旧档。
 
 = 六、关键实现细节
 
-== 6.1 CSV 手写解析：为什么不能整行 split
+== 6.1 CSV 手写解析
 
-题目禁止第三方库，所以 RFC 4180 的转义与解析必须手写。而逐行 split 是不够的，
-原因有三：
+禁止第三方库，RFC 4180 必须手写。整行 split 不够，原因有三：
 
-+ 字段里可能含半角逗号（笔记「剧情神作, DLC别买」）；
-+ 字段里可能含双引号；
-+ split 会丢掉末尾的空字段：a,b,, 被切成 2 个元素而不是 4 个。
++ 字段可能含半角逗号（笔记「剧情神作, DLC别买」）；
++ 字段可能含双引号；
++ split 会丢掉末尾空字段：a,b,, 被切成 2 个。
 
-实现对整行逐字符扫描，维护「字段起始 / 字段中间 / 引号内」三个状态：
+我们使用逐字符扫描的方法，三个状态：
 
 ```java
 if (c == '"' && atFieldStart) { inQuotes = true; }
@@ -771,20 +673,13 @@ else if (c == ',')            { 结束当前字段 }
 else                          { field.append(c); }
 ```
 
-引号内遇到双引号时看下一个字符：还是双引号就是字面引号（消费两个、追加一个），
-否则就是字段收尾。这正是 CSV「转义靠翻倍」的规则——CSV 没有反斜杠转义。
+引号内遇到双引号时看下一个字符：还是双引号则是字面引号（消费两个、追加一个），否则是字段收尾。CSV 没有反斜杠转义。
 
-*验收标准是 round-trip*：解析(格式化(fields)) 必须与 fields 完全相等。
-CsvTest 用 14 个刁钻输入固定了这一点，包括单个逗号、单个引号、两个引号、a,b,c、
-前后带空格的字符串、以及 Windows 路径 C:\games\save（反斜杠在 CSV 里是普通字符）。
+*验收标准*：round-trip。解析(格式化(f)) 必须等于 f。
 
-一处有意的简化：字段内不支持换行。理由是本项目的录入路径只有 Scanner.nextLine()，
-且 Game 会把换行归一化。代价是外部含换行的 CSV 解析不了——因此解析器在引号未闭合时
-抛异常而不是静默产出脏数据。
+*简化*：字段内不支持换行。解析器在引号未闭合时抛异常，不静默产出脏数据。
 
-== 6.2 CSV 的两个方向必须对称
-
-toCsvText 多做的每一件事，parseCsvText 都要撤销：
+== 6.2 两个方向必须对称
 
 #table(
   columns: (2.4fr, 3.6fr),
@@ -795,20 +690,18 @@ toCsvText 多做的每一件事，parseCsvText 都要撤销：
   [每条记录末尾换行], [按换行切分时去掉],
 )
 
-只做一半，round-trip 就不成立。这也是为什么 stripBom 必须在读入路径上被调用——
-早期版本漏了这一句，症状是「CSV 表头不对」，而把「期望」和「实际」两个列表打印出来时
-肉眼看起来完全一样（BOM 在终端里不可见，length() 却是 6 而不是 5）。
+任何一项只做一半，round-trip 就不成立。
 
 == 6.3 报错必须能定位
 
-GameCsv 存在的最大理由是报错信息。裸的 JDK 异常长这样，用户不知道是哪一行：
+裸的 JDK 异常：
 
 ```text
 java.lang.NumberFormatException: For input string: "abc"
 java.time.format.DateTimeParseException: Text '2022-13-01' could not be parsed
 ```
 
-经过 GameCsv 之后：
+经 GameCsv 之后：
 
 ```text
 CSV 第 7 行「purchase_price」列无法解析：'abc'，应为 数字
@@ -816,17 +709,15 @@ CSV 第 8 行「purchase_date」列无法解析：'2022-13-01'，应为 yyyy-MM-
 CSV 第 13 行：标题不能为空
 ```
 
-*行号是物理行号*（第 1 行是表头，空行也计数），这样用户能直接按行号在编辑器里定位。
+*行号是物理行号*（第 1 行是表头，空行计数），用户可按行号定位。
 
-单列转换失败时消息里带列名；而属于 Game 领域规则（价格非负、标题非空、日期非未来）
-的错误无法归到某一列，因此只保证行号——这一点在测试里是有意区分的。
+单列转换失败带列名；Game 领域规则（价格非负、标题非空、日期非未来）无法归到某一列，只保证行号。
 
-== 6.4 中英文终端宽度
+== 6.4 中英文宽度
 
-String.length() 数的是 UTF-16 码元，终端数的是显示列。「神作」的 length() 是 2，
-但显示占 4 列。若不修正，所有含中文的表格都会推歪。
+String.length() 数的是 UTF-16 码元，终端数的则是显示列。两者标准不同导致「神作」length() 是 2 但占 4 列。
 
-实现上用四个 Unicode 区间判断宽字符：
+查阅文档得知四个特殊区间：
 
 #table(
   columns: (1.8fr, 1.4fr, 1.8fr),
@@ -837,35 +728,27 @@ String.length() 数的是 UTF-16 码元，终端数的是显示列。「神作�
   [`U+FFE0–U+FFE6`], [全角符号], [￥],
 )
 
-只覆盖中英文字符与 ASCII 符号是明确的取舍（见第八节）。
-顺带注意 ¥ 有两个码点：U+00A5（半角，1 列）与 U+FFE5（全角，2 列），本项目用半角。
+出于简便性考虑，本项目只覆盖中英 + ASCII。
 
-== 6.5 UI 层只写三个 catch
-
-Menu.handle 是唯一处理错误的地方，三个 catch 各管一层：
+== 6.5 UI 的三个 catch
 
 #table(
-  columns: (2.2fr, 2fr, 3.2fr),
+  columns: (auto, auto, auto),
   table.header([异常], [含义], [处理]),
-  [`Console.CancelledException`], [用户在必填字段留空], [打印「已取消」，回主菜单],
-  [`InvalidGameDataException`（含子类）], [数据非法 / 重复入库],
-  [打印「【警告】消息」，消息可直接展示],
+  [`Console.CancelledException`], [必填字段留空], [打印「已取消」，回主菜单],
+  [`InvalidGameDataException`], [数据非法 / 重复入库],
+  [打印警告消息，消息可直接展示],
   [`UncheckedIOException`], [存档读写失败],
-  [打印「【错误】消息」并提示重试，不退出程序],
+  [打印错误消息并提示重试，不退出程序],
 )
 
-第三条的含义是：*保存失败时不能退出*。否则用户的数据没保存，程序却关掉了。
+*保存失败不能退出*，否则数据没保存程序却关了。
 
-DuplicateGameException 从 InvalidGameDataException 继承，正是为了让 UI 只需一个
-catch。如果它直接继承 RuntimeException，异常会穿出 run() 和 main()，
-用户看到的是栈追踪而不是「该游戏已存在」，且库里的数据尚未保存。
+注意：DuplicateGameException 继承 InvalidGameDataException 是为了让 UI 只需一个 catch。若继承 RuntimeException，异常会穿出 main，用户看到栈追踪而不是提示，且数据尚未保存。
 
 = 七、测试与验证
 
-== 7.1 测试规模
-
-题目禁止第三方库，因此用不了 JUnit，测试框架是手写的 TestRunner
-（check / expectThrows / expectInvalid 三个断言原语 + 通过/失败计数）。
+题目禁止第三方库，用不了 JUnit，测试框架是手写的 TestRunner（check / expectThrows / expectInvalid + 通过失败计数），共 12 个测试类。
 
 ```text
 ./test.sh
@@ -873,78 +756,16 @@ catch。如果它直接继承 RuntimeException，异常会穿出 run() 和 main(
 通过 673 项，失败 0 项
 ```
 
-#table(
-  columns: (2fr, 0.8fr, 3.4fr),
-  table.header([测试类], [断言数], [覆盖]),
-  [`PlatformTest`], [32], [枚举解析、values() 副本语义、EnumSet],
-  [`GameConstructTest`], [28], [构造、边界值、9 类非法输入],
-  [`GameEqualsTest`], [21], [equals / hashCode 契约、容器实测],
-  [`GameStateTest`], [24], [通关状态、补录日期、业务方法校验、隐藏],
-  [`GameLibraryTest`], [115], [查重、Optional、搜索、分组、批量导入],
-  [`CsvTest`], [42], [RFC 4180 转义与解析、BOM、round-trip],
-  [`GameCsvTest`], [95], [11 列映射、错误报告带行号、文档级 round-trip],
-  [`StatsTest`], [48], [聚合、顺序稳定性、空库、最烧钱的平台],
-  [`GameFormatterTest`], [50], [显示宽度、补齐、对齐、数值格式],
-  [`ConsoleTest`], [77], [输入重试、NaN、EOF、confirm 默认值、换行残留],
-  [`XorTest`], [19], [XOR 自逆性、长度不变、与序列化流配合],
-  [`MenuTest`], [118], [7 个菜单分支端到端、持久化、批量导入],
-)
-
-== 7.2 菜单测试的驱动方式
-
-Console 的流可注入，因此整个菜单可以用一段脚本文本驱动：
+Console 的流可注入，所以 7 个菜单分支用一段脚本文本端到端驱动：
 
 ```java
 new Console(new Scanner(new StringReader("1\n1\nSteam\nElden Ring\n...")),
             new PrintStream(buffer, true, StandardCharsets.UTF_8));
 ```
 
-输出写进 ByteArrayOutputStream，于是 118 个断言全是这种形状：
+断言集中在「编译器不报错但行为错」的地方：Optional 返回 null、equals 误比全部字段、整行 split 丢末尾空字段、求最大值初值取 0、保存误用 all() 造成数据丢失、EOF 导致重试循环空转。
 
-```java
-t.check(f.output().contains("已成功入库：Elden Ring | Steam"), "提示了入库成功");
-t.check(f.lib.size() == 1, "库里 1 条");
-```
-
-没有这个设计，7 个菜单分支只能靠人工点击验证，也无法回归。
-
-== 7.3 值得单说的几条断言
-
-测试里带星号的用例都是「抓某类静默失败」的：
-
-#table(
-  columns: (3.4fr, 2.6fr),
-  table.header([断言], [抓的是什么]),
-  [未命中时返回的是 Optional 对象，而不是 null], [Optional 方法返回 null],
-  [改了时长后 equals 仍为 true], [equals 误比全部字段导致的容器失效],
-  [中间和末尾的空字段都不能丢], [整行 split 的已知缺陷],
-  [List.of(values()).contains(null) 抛 NPE], [不可变集合的 null 敌意（反面对照）],
-  [String.strip() 去不掉 BOM], [想用 strip() 简化 stripBom 的误判],
-  [只有 0 元游戏时，最烧钱的平台仍是 Epic], [求最大值时初值取 0 导致漏掉最大值为 0],
-  [隐藏的游戏也存进了磁盘（2 条，不是 1 条）], [保存误用 all() 造成永久数据丢失],
-  [失败后回到了菜单，没有退出], [保存失败时程序退出，数据丢失],
-  [空脚本（EOF）也能正常退出，不死循环], [输入流结束时重试循环空转],
-)
-
-== 7.4 测试维护中的两次自我纠错
-
-+ *mostExpensivePlatform 的初值*。实现里 double max = 0，导致「全库都是 0 元游戏」时
-  返回 Optional.empty()——而库并不是空的。测试一次抓出 3 条失败。
-+ *测试自身的断言写错了*。有一条对齐断言比较的是第一个竖线的字符下标，
-  而中文行的字符下标本来就比 ASCII 行小——「显示宽度相同」不等于「字符下标相同」。
-  改成用 width() 量之后通过，并额外加了一条反面对照说明这件事。
-
-第 2 条说明：测试失败时先怀疑测试，再怀疑代码。
-
-== 7.5 手动验收
-
-除自动化测试外，还做了以下手动验证：
-
-+ 从 GameLib.zip 解压到干净目录 → ./build.sh → ./test.sh → 673/0
-+ 用解压出的 jar 跑完整菜单流程，确认 game_lib.dat 生成
-+ 删除 game_lib.dat 后重启，确认回退到 game_lib.csv 并正确提示
-+ 手工在 CSV 里制造重复行，确认启动时报告「N 条重复被跳过」
-+ xxd 确认 CSV 前三字节为 EF BB BF，且 game_lib.dat 不再以 AC ED 开头
+手动验收：zip 解压后构建并跑测试；删除 .dat 确认回退 CSV；制造重复行确认启动报告跳过条数；xxd 确认 BOM 与 .dat 不以 AC ED 开头。
 
 = 八、已知限制与取舍
 
@@ -960,19 +781,16 @@ t.check(f.lib.size() == 1, "库里 1 条");
   [4], [Main 的加载段没有单元测试], [「重复行被跳过」的提示只有手动验证过],
   [需要重定向 System.in/out 并固定工作目录，代价高于收益],
   [5], [类名 Console 与 java.io.Console 重名], [全项目禁止使用 `import java.io.*`],
-  [显式 import 即可避开；改名会动 4 个文件],
+  [显式 import 即可避开；改名要动 4 个文件],
   [6], [价格用 double], [大量求和时可能出现浮点尾差],
-  [显示时用两位小数格式化；作业规模下不影响任何判断],
+  [显示时用两位小数格式化；作业规模下不影响判断],
   [7], [isWide 参数是 char 而非码点], [BMP 之外的字符按代理对拆成两个各算 1 列],
   [常见 emoji 碰巧得到 2 列；中文都在 BMP 内],
   [8], [加密前的旧 game_lib.dat 读不出来], [有 CSV 则回退，无 CSV 则拒绝启动],
-  [引入 XOR 的必然结果。拒绝启动好过以空库覆盖旧档],
+  [引入 XOR 的必然结果；拒绝启动好过以空库覆盖旧档],
   [9], [XOR 密钥硬编码、强度很低], [已知明文攻击可反推密钥],
-  [§5 原文只要求「简单 XOR」；5.8.5 已如实说明它只是混淆],
+  [§5 只要求「简单 XOR」],
 )
-
-第 3 条与第 4 条是本项目最需要在报告中主动说明的两点：它们是真实存在的缺口，
-而不是被遗漏的。
 
 #pagebreak()
 
@@ -980,27 +798,19 @@ t.check(f.lib.size() == 1, "库里 1 条");
 
 = 九、生成式 AI 工具使用声明
 
-本次实验在实施与报告撰写过程中使用了大型语言模型作为辅助工具，
-以下按工具概况与具体辅助作用分述。
+本次实验在实施与报告撰写过程中使用了大型语言模型作为辅助工具，以下按工具概况与具体辅助作用分述。
 
 == 9.1 使用工具概况
 
-+ *实验执行、代码编写与报告撰写*：DeepSeek Harness（命令行编码代理），
-  模型为 deepseek-v4-flash，在本地工作目录中交互，贯穿实验全过程。
+*实验执行、代码编写与报告撰写*：DeepSeek Harness，模型为 deepseek-v4-flash，在本地工作目录中交互，贯穿实验全过程。
 
 == 9.2 具体辅助作用
 
-+ *架构与设计讨论*：包结构划分、唯一键设计、方案 B 的取舍、equals / hashCode 契约、
-  Optional 的可序列化限制等设计决策的论证过程。
-+ *代码编写*：model、store、io、ui 四层的实现与重构。
-+ *测试编写*：673 项断言的测试套件，以及测试框架 TestRunner 本身。
-+ *缺陷定位*：本文 7.4 节记录的两处纠错，均由测试或编译期检查暴露后修正。
-+ *文字润色*：本报告的措辞与结构。
++ 与实验者交流并辅助拍板系统架构。
++ 完成了整个 test 模块。
++ 在编码过程中提供了必要的 Java 知识讲解。
++ 完成了实验报告主体部分的编写。
 
 == 9.3 补充说明
 
-以上所有 AI 工具生成的技术方案与代码均经过实验者的实际操作验证：
-每一次设计选择都通过编译（`javac --release 17 -Xlint:all` 零警告）与
-673 项自动化测试确认，关键行为另外做了端到端手动验收（见 7.5 节）。
-AI 工具在本实验中充当技术顾问与写作辅助角色，所有实验操作的实施、数据的采集与分析、
-以及最终结论的得出，均由实验者本人独立完成。
+以上所有 AI 工具生成的技术方案与代码均经过实验者的实际操作验证：每一次设计选择都通过编译（`javac --release 17 -Xlint:all` 零警告）与 673 项自动化测试确认，关键行为另外做了端到端手动验收。所有实验操作的实施、数据的采集与分析、以及最终结论的得出，均由实验者本人独立完成。
